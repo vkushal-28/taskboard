@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(ts|tsx|js|jsx|json|css|md)$' | xargs -r npx --no-install prettier --write --ignore-unknown >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
