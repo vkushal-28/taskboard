@@ -1,7 +1,32 @@
 import { createApp } from './app.js';
+import { env } from './config/env.js';
+import { connectDb, disconnectDb } from './db/mongoose.js';
+import { logger } from './lib/logger.js';
 
-const port = Number(process.env.PORT ?? 4000);
+const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-createApp().listen(port, () => {
-  console.log(`api listening on http://localhost:${port}`);
+await connectDb(env.MONGODB_URI);
+
+const server = createApp().listen(env.PORT, () => {
+  logger.info(`api listening on http://localhost:${env.PORT}`);
 });
+
+function shutdown(signal: NodeJS.Signals) {
+  logger.info({ signal }, 'shutting down');
+  setTimeout(() => {
+    logger.error('graceful shutdown timed out, forcing exit');
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS).unref();
+
+  server.close(() => {
+    disconnectDb()
+      .then(() => process.exit(0))
+      .catch((error: unknown) => {
+        logger.error({ error }, 'error while closing mongodb');
+        process.exit(1);
+      });
+  });
+}
+
+process.once('SIGTERM', shutdown);
+process.once('SIGINT', shutdown);
