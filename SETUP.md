@@ -4,15 +4,15 @@ Drop these files into an empty repo, then follow the steps. Delete this file onc
 
 ## What's inside
 
-| File | What it does |
-| --- | --- |
-| CLAUDE.md | Project memory. Claude Code loads it automatically every session. |
-| docs/PLAN.md | The 8 phases, split into slices, each with a ready prompt. |
-| docs/PROGRESS.md | Handoff log. `/wrap-up` writes it, `/start` reads it. This is how Claude "remembers" yesterday. |
-| docs/adr/ | Architecture decision records (template + ADR 001). |
-| .claude/skills/ | Project commands: `/start`, `/phase`, `/review-phase`, `/wrap-up`, `/adr`. |
-| .claude/settings.json | Hook: runs Prettier on every file Claude edits (needs `jq`; Prettier installs in Phase 0). |
-| .mcp.json | MCP servers: Context7 (current library docs), Playwright (drives a browser), MongoDB (read-only DB access). |
+| File                  | What it does                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| CLAUDE.md             | Project memory. Claude Code loads it automatically every session.                                           |
+| docs/PLAN.md          | The 8 phases, split into slices, each with a ready prompt.                                                  |
+| docs/PROGRESS.md      | Handoff log. `/wrap-up` writes it, `/start` reads it. This is how Claude "remembers" yesterday.             |
+| docs/adr/             | Architecture decision records (template + ADR 001).                                                         |
+| .claude/skills/       | Project commands: `/start`, `/phase`, `/review-phase`, `/wrap-up`, `/adr`.                                  |
+| .claude/settings.json | Hook: runs Prettier on every file Claude edits (needs `jq`; Prettier installs in Phase 0).                  |
+| .mcp.json             | MCP servers: Context7 (current library docs), Playwright (drives a browser), MongoDB (read-only DB access). |
 
 ## One-time setup
 
