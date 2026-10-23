@@ -5,10 +5,17 @@ export const loggerOptions = {
   redact: {
     paths: [
       'password',
+      'passwordHash',
       'token',
+      'accessToken',
+      'refreshToken',
       '*.password',
+      '*.passwordHash',
       '*.token',
+      '*.accessToken',
+      '*.refreshToken',
       'req.body.password',
+      'req.cookies',
       'req.headers.cookie',
       'req.headers.authorization',
       'res.headers["set-cookie"]',

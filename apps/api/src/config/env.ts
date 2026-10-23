@@ -7,6 +7,8 @@ const envSchema = z.object({
     .string()
     .regex(/^mongodb(\+srv)?:\/\//, 'must be a mongodb:// or mongodb+srv:// URI'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  JWT_ACCESS_SECRET: z.string().min(32, 'must be at least 32 characters'),
+  CLIENT_URL: z.url().default('http://localhost:5173'),
 });
 
 export type Env = z.infer<typeof envSchema>;
