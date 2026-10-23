@@ -13,6 +13,10 @@ export default defineConfig(
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
+    rules: {
+      // Express identifies error handlers by arity, so unused `_next` params must be allowed.
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
   },
   { files: ['**/*.js'], extends: [tseslint.configs.disableTypeChecked] },
   { files: ['**/*.js', 'apps/api/**/*.ts'], languageOptions: { globals: globals.node } },

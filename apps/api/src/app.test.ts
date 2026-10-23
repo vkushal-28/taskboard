@@ -1,17 +1,18 @@
-import mongoose from 'mongoose';
 import request from 'supertest';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.js';
+import { getDbStatus } from './db/mongoose.js';
 
-function stubReadyState(state: mongoose.ConnectionStates) {
-  vi.spyOn(mongoose.connection, 'readyState', 'get').mockReturnValue(state);
-}
+// Mock our own status helper rather than mongoose.connection.readyState: overriding the real
+// connection's state also breaks the shared test database connection.
+vi.mock('./db/mongoose.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./db/mongoose.js')>()),
+  getDbStatus: vi.fn(),
+}));
 
 describe('GET /health', () => {
-  afterEach(() => vi.restoreAllMocks());
-
   it('returns 200 when the database is connected', async () => {
-    stubReadyState(mongoose.ConnectionStates.connected);
+    vi.mocked(getDbStatus).mockReturnValue('connected');
 
     const res = await request(createApp()).get('/health');
 
@@ -20,7 +21,7 @@ describe('GET /health', () => {
   });
 
   it('returns 503 when the database is disconnected', async () => {
-    stubReadyState(mongoose.ConnectionStates.disconnected);
+    vi.mocked(getDbStatus).mockReturnValue('disconnected');
 
     const res = await request(createApp()).get('/health');
 

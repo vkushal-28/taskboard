@@ -3,3 +3,5 @@ packages:
   - packages/*
 allowBuilds:
   esbuild: true
+  # Downloads mongod at install time; it is fetched lazily on the first test run instead.
+  mongodb-memory-server: false
