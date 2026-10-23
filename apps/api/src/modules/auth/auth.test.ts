@@ -80,6 +80,16 @@ describe('POST /auth/register', () => {
     expect(errorOf(res).code).toBe('CONFLICT');
   });
 
+  it('creates exactly one account when two registrations race', async () => {
+    const results = await Promise.all([
+      request(app).post('/auth/register').send(body),
+      request(app).post('/auth/register').send(body),
+    ]);
+
+    expect(results.map((res) => res.status).sort()).toEqual([201, 409]);
+    expect(await UserModel.countDocuments({ email: 'priya@acme.dev' })).toBe(1);
+  });
+
   it('rejects an invalid body with 400 and field errors', async () => {
     const res = await request(app)
       .post('/auth/register')
@@ -114,6 +124,16 @@ describe('POST /auth/login', () => {
     expect(userOf(res)).toEqual({ id: user.id, name: user.name, email: user.email });
     expect(getCookie(res, ACCESS_COOKIE)).toBeDefined();
     expect(getCookie(res, REFRESH_COOKIE)).toBeDefined();
+  });
+
+  it('matches the email case-insensitively', async () => {
+    await createUser({ email: 'priya@acme.dev' });
+
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: '  Priya@ACME.dev ', password: DEFAULT_PASSWORD });
+
+    expect(res.status).toBe(200);
   });
 
   it('rejects a wrong password with 401', async () => {
@@ -188,6 +208,7 @@ describe('POST /auth/refresh', () => {
     const reuse = await refreshWith(original);
 
     expect(reuse.status).toBe(401);
+    expect(errorOf(reuse).code).toBe('REFRESH_TOKEN_ROTATED');
     expect((await refreshWith(next)).status).toBe(204);
   });
 
@@ -200,6 +221,7 @@ describe('POST /auth/refresh', () => {
     const reuse = await refreshWith(original);
 
     expect(reuse.status).toBe(401);
+    expect(errorOf(reuse).code).toBe('UNAUTHORIZED');
     expect((await refreshWith(next)).status).toBe(401);
     expect(await RefreshTokenModel.countDocuments({ userId: user._id, revokedAt: null })).toBe(0);
   });
@@ -214,6 +236,16 @@ describe('POST /auth/refresh', () => {
     await refreshWith(laptop);
 
     expect((await refreshWith(phone)).status).toBe(204);
+  });
+
+  it('rotates a token exactly once when two refreshes race', async () => {
+    const user = await createUser();
+    const token = await loginAndGetRefreshToken(user.email);
+
+    const results = await Promise.all([refreshWith(token), refreshWith(token)]);
+
+    expect(results.map((res) => res.status).sort()).toEqual([204, 401]);
+    expect(await RefreshTokenModel.countDocuments({ userId: user._id, revokedAt: null })).toBe(1);
   });
 
   it('rejects an expired refresh token', async () => {

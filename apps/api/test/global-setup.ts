@@ -7,12 +7,14 @@ declare module 'vitest' {
   }
 }
 
-// One mongod for the whole run; each test file gets its own database in test/setup.ts.
-export default async function setup(project: TestProject) {
-  const mongo = await MongoMemoryServer.create();
-  project.provide('mongoUri', mongo.getUri());
+let mongo: MongoMemoryServer | undefined;
 
-  return async () => {
-    await mongo.stop();
-  };
+// One mongod for the whole run; each test file gets its own database in test/setup.ts.
+export async function setup(project: TestProject) {
+  mongo = await MongoMemoryServer.create();
+  project.provide('mongoUri', mongo.getUri());
+}
+
+export async function teardown() {
+  await mongo?.stop();
 }

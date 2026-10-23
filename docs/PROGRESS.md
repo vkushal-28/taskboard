@@ -25,6 +25,11 @@ Claude reads this file at the start of every session. Keep the top block current
   - Deferred review findings (low):
     - #7: wrap `connectDb` in `server.ts` with try/catch, then `logger.fatal({ err })` and exit 1.
     - #8: set `PORT: 4000` in the compose api `environment`.
+  - Deferred Phase 1 review findings:
+    - Phase 7: set `app.set('trust proxy', 1)` on Render. Without it `req.ip` is the proxy, so the auth rate limit is shared by every user (global lockout after 10 logins).
+    - Phase 3: the full Docker stack runs `NODE_ENV=production`, so cookies are `Secure; SameSite=None` over http://localhost:8080. Safari drops them. Add a `COOKIE_SECURE` override or test login with `pnpm dev`.
+    - Optional: absolute session lifetime (e.g. 30 days per refresh family). Rotation currently slides the 7-day expiry forever.
+  - Web client (Phase 3): a refresh 401 with code `REFRESH_TOKEN_ROTATED` means another tab already rotated the cookie. Retry the original request once instead of logging out.
   - GitHub's `ubuntu-latest` is moving to Ubuntu 26. If CI breaks for no clear reason, pin `ubuntu-24.04`.
 
 ## Phase checklist

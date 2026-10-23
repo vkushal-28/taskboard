@@ -84,7 +84,9 @@ export async function refresh(refreshToken: string | undefined): Promise<Session
   }
 
   if (now.getTime() - existing.revokedAt.getTime() <= REFRESH_REUSE_GRACE_MS) {
-    throw new Unauthorized('Refresh token already rotated');
+    // A distinct code tells the client its cookie was already replaced by another tab, so it
+    // should retry the original request instead of logging the user out.
+    throw new Unauthorized('Refresh token already rotated', 'REFRESH_TOKEN_ROTATED');
   }
 
   await revokeFamily(existing.familyId, now);

@@ -35,6 +35,19 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...required, JWT_ACCESS_SECRET: 'short' })).toThrow(/32 characters/);
   });
 
+  it('requires CLIENT_URL in production', () => {
+    expect(() => parseEnv({ ...required, NODE_ENV: 'production' })).toThrow(/CLIENT_URL/);
+  });
+
+  it('accepts an explicit CLIENT_URL in production', () => {
+    const env = parseEnv({
+      ...required,
+      NODE_ENV: 'production',
+      CLIENT_URL: 'https://app.example.com',
+    });
+    expect(env.CLIENT_URL).toBe('https://app.example.com');
+  });
+
   it('rejects a CLIENT_URL that is not a URL', () => {
     expect(() => parseEnv({ ...required, CLIENT_URL: 'localhost' })).toThrow(/CLIENT_URL/);
   });

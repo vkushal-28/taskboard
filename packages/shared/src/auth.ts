@@ -3,7 +3,9 @@ import { z } from 'zod';
 // bcrypt ignores everything after 72 bytes, so longer passwords would give a false sense of strength.
 const PASSWORD_MAX_BYTES = 72;
 
-const emailSchema = z.email().trim().toLowerCase().max(254);
+// Normalise before validating: z.email() checks the raw string, so surrounding spaces from a
+// paste would otherwise fail as "Invalid email".
+const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
 export const registerSchema = z.object({
   name: z.string().trim().min(1).max(80),
