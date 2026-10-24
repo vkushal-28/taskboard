@@ -4,7 +4,7 @@ import { roleSchema } from './roles.js';
 export const objectIdSchema = z.string().regex(/^[0-9a-f]{24}$/i, 'Invalid id');
 
 export const DEFAULT_BOARD_COLOR = '#2563eb';
-const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, 'Use a hex color like #2563eb');
+export const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, 'Use a hex color like #2563eb');
 const titleSchema = z.string().trim().min(1).max(100);
 
 // Requests

@@ -11,6 +11,7 @@ export const activityTypeSchema = z.enum([
   'card.updated',
   'card.moved',
   'card.archived',
+  'card.restored',
   'card.deleted',
 ]);
 
