@@ -13,7 +13,7 @@ Do not use transactions. Order each multi-step write so that a crash midway leav
 
 - **Create board:** create the board, then `insertMany` its lists. If the lists fail, delete the board and rethrow.
 - **Delete board:** delete the board first, then its lists, cards and activity. Leftover children cannot be reached, because `requireBoardRole` finds no board.
-- **Delete list:** delete the list, then its cards. Leftover cards point to a missing list and are not shown.
+- **Delete list:** delete its cards, then the list. A crash in between leaves a list that is still shown and can be deleted again. A card created or moved into the list while it is being deleted can still outlive it, so `GET /boards/:boardId` only returns cards whose list exists.
 - **Activity:** logged after the main write and never fails the request (a lost activity row beats the client retrying a write that was saved).
 
 ## Alternatives considered

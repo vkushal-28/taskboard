@@ -10,7 +10,7 @@ Lists and cards are ordered by a fractional-index string `position`, so a move o
 ## Decision
 
 - **Unique index** on `{ boardId, position }` for lists and `{ boardId, listId, position }` for cards. Duplicate positions become impossible, not just unlikely.
-- **`writeAtPosition(before, after, write)`** computes the key and writes. On a duplicate-key error (E11000) it retries with a key that is above the colliding key and still below `after`. The first retry picks **one of 10 keys at random**, so writers that collided spread out instead of colliding again one key higher. After 5 attempts it returns 409.
+- **`writeAtPosition(before, after, write)`** computes the key and writes. On a duplicate-key error (E11000) it retries with a key that is above the colliding key and still below `after`. Each retry picks **one of 10 keys at random**, so writers that collided spread out instead of colliding again one key higher. After 5 attempts it returns 409.
 - **Stale views return 409:** a neighbour that is missing or in another list, a target list on another board, or a visible item between the neighbours. Archived cards are ignored by this check because the client cannot see them.
 
 ## Alternatives considered

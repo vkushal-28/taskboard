@@ -4,8 +4,9 @@ import {
   boardSummarySchema,
   DEFAULT_BOARD_COLOR,
 } from '@taskboard/shared';
+import { Types } from 'mongoose';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
   accessCookieFor,
@@ -33,6 +34,9 @@ const strictMembersSchema = z.object({
 let app: ReturnType<typeof createApp>;
 beforeEach(() => {
   app = createApp();
+});
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('GET /boards', () => {
@@ -83,6 +87,17 @@ describe('POST /boards', () => {
     expect(activity.map((entry) => entry.type)).toEqual(['board.created']);
   });
 
+  it('removes the board again when its starter lists cannot be created', async () => {
+    vi.spyOn(ListModel, 'insertMany').mockRejectedValueOnce(new Error('db down'));
+    const res = await request(app)
+      .post('/boards')
+      .set('Cookie', await accessCookieFor(await createUser()))
+      .send({ title: 'Doomed' });
+
+    expect(res.status).toBe(500);
+    expect(await BoardModel.countDocuments()).toBe(0);
+  });
+
   it.each<[object, string]>([
     [{ title: '' }, 'an empty title'],
     [{ title: 'Ok', color: 'red' }, 'a non-hex color'],
@@ -129,6 +144,22 @@ describe('GET /boards/:boardId', () => {
     ]);
     expect(detail.lists.map((list) => list.id)).toEqual([first.id, second.id]);
     expect(detail.cards.map((card) => card.id)).toEqual([earlier.id, later.id]);
+  });
+});
+
+describe('GET /boards/:boardId orphans', () => {
+  it('leaves out cards whose list no longer exists', async () => {
+    const { board, viewer } = await createBoardWithRoles();
+    const list = await createList(board._id);
+    const kept = await createCard(list);
+    // A card that landed in a list while the list was being deleted.
+    await createCard({ _id: new Types.ObjectId(), boardId: board._id });
+
+    const res = await request(app)
+      .get(`/boards/${board.id}`)
+      .set('Cookie', await accessCookieFor(viewer));
+
+    expect(parseBody(boardDetailSchema, res).cards.map((card) => card.id)).toEqual([kept.id]);
   });
 });
 

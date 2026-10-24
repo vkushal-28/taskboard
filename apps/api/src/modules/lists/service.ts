@@ -80,9 +80,12 @@ export async function moveList(
 }
 
 export async function deleteList(boardId: string, listId: string, actorId: string): Promise<void> {
-  const list = await ListModel.findOneAndDelete({ _id: listId, boardId }).lean();
+  const list = await ListModel.findOne({ _id: listId, boardId }, { title: 1 }).lean();
   if (!list) throw new NotFound('List not found');
-  await CardModel.deleteMany({ listId });
+  // Cards first (ADR 006): a crash in between leaves a list that is still shown and can be
+  // deleted again, not cards whose list is gone. boardId lets the query use the cards index.
+  await CardModel.deleteMany({ boardId, listId });
+  await ListModel.deleteOne({ _id: listId, boardId });
 
   await logActivity({
     boardId,

@@ -81,6 +81,9 @@ export async function getBoardDetail(boardId: string, myRole: Role): Promise<Boa
     CardModel.find({ boardId, archived: false }).sort(BY_POSITION).lean(),
   ]);
   if (!board) throw new NotFound('Board not found');
+  // A card created or moved while its list was being deleted can outlive the list (ADR 006).
+  const listIds = new Set(lists.map((list) => list._id.toString()));
+  const visibleCards = cards.filter((card) => listIds.has(card.listId.toString()));
 
   return {
     board: {
@@ -94,7 +97,7 @@ export async function getBoardDetail(boardId: string, myRole: Role): Promise<Boa
       ),
     },
     lists: lists.map(toListDto),
-    cards: cards.map(toCardDto),
+    cards: visibleCards.map(toCardDto),
   };
 }
 

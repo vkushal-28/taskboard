@@ -19,7 +19,9 @@ const activitySchema = new Schema<Activity>(
     type: { type: String, enum: ACTIVITY_TYPES, required: true },
     meta: { type: Schema.Types.Mixed, default: {} },
   },
-  { timestamps: { createdAt: true, updatedAt: false } },
+  // minimize: false keeps an empty `meta: {}`; by default Mongoose drops empty objects on save,
+  // and readers would get undefined despite the type.
+  { timestamps: { createdAt: true, updatedAt: false }, minimize: false },
 );
 
 // The board and card feeds read newest first.

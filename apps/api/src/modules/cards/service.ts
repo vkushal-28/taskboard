@@ -1,5 +1,5 @@
 import type { CardDto, CreateCardInput, MoveCardInput, UpdateCardInput } from '@taskboard/shared';
-import { Types } from 'mongoose';
+import { Error as MongooseError, Types } from 'mongoose';
 import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
 import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
 import { logActivity } from '../activity/service.js';
@@ -13,8 +13,11 @@ export async function createCard(
   actorId: string,
   input: CreateCardInput,
 ): Promise<CardDto> {
-  // After the last card, archived ones included: they still hold their positions.
-  const last = await CardModel.findOne({ listId }, { position: 1 }).sort({ position: -1 }).lean();
+  // After the last card, archived ones included: they still hold their positions. Filtering by
+  // boardId as well lets this use the { boardId, listId, position } index.
+  const last = await CardModel.findOne({ boardId, listId }, { position: 1 })
+    .sort({ position: -1 })
+    .lean();
   const card = await writeAtPosition(last?.position ?? null, null, (position) =>
     CardModel.create({ boardId, listId, ...input, position }),
   );
@@ -57,7 +60,13 @@ export async function updateCard(
   }
 
   const archiveChanged = card.isModified('archived');
-  await card.save();
+  try {
+    await card.save();
+  } catch (err) {
+    // Someone deleted the card between our read and this save.
+    if (err instanceof MongooseError.DocumentNotFoundError) throw new NotFound('Card not found');
+    throw err;
+  }
 
   const fields = Object.keys(input).filter((field) => field !== 'archived');
   if (fields.length > 0) {
@@ -94,6 +103,7 @@ export async function moveCard(
   // A visible card between the neighbours (or in a list the client thought was empty) means the
   // client's order is out of date. Archived cards are invisible to the client, so they don't count.
   const inGap = await CardModel.exists({
+    boardId,
     listId,
     archived: false,
     _id: { $ne: cardId },

@@ -1,7 +1,7 @@
 import { cardDtoSchema } from '@taskboard/shared';
-import { Types } from 'mongoose';
+import { Error as MongooseError, Types } from 'mongoose';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
   accessCookieFor,
@@ -23,6 +23,9 @@ const cardBodySchema = z.object({ card: cardDtoSchema });
 let app: ReturnType<typeof createApp>;
 beforeEach(() => {
   app = createApp();
+});
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 /** Ids of the visible cards in a list, in display order. */
@@ -207,6 +210,21 @@ describe('PATCH /cards/:cardId', () => {
       .sort({ createdAt: 1, _id: 1 })
       .lean();
     expect(activity.map((entry) => entry.type)).toEqual(['card.archived', 'card.restored']);
+  });
+
+  it('returns 404 when the card is deleted while being saved', async () => {
+    const { a, cookie } = await boardWithCards();
+    vi.spyOn(CardModel.prototype, 'save').mockRejectedValueOnce(
+      new MongooseError.DocumentNotFoundError('No card matches the save'),
+    );
+
+    const res = await request(app)
+      .patch(`/cards/${a.id}`)
+      .set('Cookie', cookie)
+      .send({ title: 'X' });
+
+    expect(res.status).toBe(404);
+    expect(errorOf(res).code).toBe('NOT_FOUND');
   });
 
   it('rejects an empty update', async () => {

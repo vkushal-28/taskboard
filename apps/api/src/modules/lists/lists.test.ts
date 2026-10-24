@@ -1,6 +1,6 @@
 import { listDtoSchema } from '@taskboard/shared';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Types } from 'mongoose';
 import { z } from 'zod';
 import {
@@ -24,6 +24,9 @@ const listBodySchema = z.object({ list: listDtoSchema });
 let app: ReturnType<typeof createApp>;
 beforeEach(() => {
   app = createApp();
+});
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 async function listOrder(boardId: Types.ObjectId): Promise<string[]> {
@@ -213,6 +216,18 @@ describe('DELETE /lists/:listId', () => {
       type: 'list.deleted',
       meta: { listId: a.id },
     });
+  });
+
+  it('deletes the cards before the list, so a failure leaves the list visible', async () => {
+    const { a, cookie } = await boardWithThreeLists();
+    await createCard(a);
+    vi.spyOn(ListModel, 'deleteOne').mockRejectedValueOnce(new Error('db down'));
+
+    const res = await request(app).delete(`/lists/${a.id}`).set('Cookie', cookie);
+
+    expect(res.status).toBe(500);
+    expect(await ListModel.exists({ _id: a._id })).not.toBeNull();
+    expect(await CardModel.countDocuments({ listId: a._id })).toBe(0);
   });
 
   it('returns 404 to a non-member', async () => {
