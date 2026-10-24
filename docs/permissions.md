@@ -17,6 +17,7 @@ Every board-scoped route needs a signed-in user first:
 | `DELETE /boards/:boardId`     | owner     | ✓     | 403    | 403    |
 | `POST /boards/:boardId/lists` | member    | ✓     | ✓      | 403    |
 | `PATCH /lists/:listId`        | member    | ✓     | ✓      | 403    |
+| `PATCH /lists/:listId/move`   | member    | ✓     | ✓      | 403    |
 | `DELETE /lists/:listId`       | member    | ✓     | ✓      | 403    |
 | `POST /lists/:listId/cards`   | member    | ✓     | ✓      | 403    |
 | `GET /cards/:cardId`          | viewer    | ✓     | ✓      | ✓      |
