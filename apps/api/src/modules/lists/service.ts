@@ -1,6 +1,6 @@
 import type { CreateListInput, ListDto, MoveListInput, RenameListInput } from '@taskboard/shared';
 import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
-import { positionBetween, STALE_ORDER_MESSAGE } from '../../lib/position.js';
+import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
 import { logActivity } from '../activity/service.js';
 import { CardModel } from '../cards/model.js';
 import { ListModel, toListDto } from './model.js';
@@ -11,11 +11,9 @@ export async function createList(
   input: CreateListInput,
 ): Promise<ListDto> {
   const last = await ListModel.findOne({ boardId }, { position: 1 }).sort({ position: -1 }).lean();
-  const list = await ListModel.create({
-    boardId,
-    title: input.title,
-    position: positionBetween(last?.position ?? null, null),
-  });
+  const list = await writeAtPosition(last?.position ?? null, null, (position) =>
+    ListModel.create({ boardId, title: input.title, position }),
+  );
 
   await logActivity({
     boardId,
@@ -62,22 +60,19 @@ export async function moveList(
     neighbourPosition(boardId, input.beforeId),
     neighbourPosition(boardId, input.afterId),
   ]);
-  const position = positionBetween(before, after);
-
   // Another list sitting between the neighbours means the client's order is out of date:
   // moving "between A and C" would silently land on the wrong side of B.
-  const gap: { $gt?: string; $lt?: string } = {};
-  if (before !== null) gap.$gt = before;
-  if (after !== null) gap.$lt = after;
-  if (await ListModel.exists({ boardId, _id: { $ne: listId }, position: gap })) {
+  if (await ListModel.exists({ boardId, _id: { $ne: listId }, ...positionGap(before, after) })) {
     throw new Conflict(STALE_ORDER_MESSAGE);
   }
 
-  const list = await ListModel.findOneAndUpdate(
-    { _id: listId, boardId },
-    { position },
-    { returnDocument: 'after' },
-  ).lean();
+  const list = await writeAtPosition(before, after, (position) =>
+    ListModel.findOneAndUpdate(
+      { _id: listId, boardId },
+      { position },
+      { returnDocument: 'after' },
+    ).lean(),
+  );
   if (!list) throw new NotFound('List not found');
 
   await logActivity({ boardId, actorId, type: 'list.moved', meta: { listId } });

@@ -7,6 +7,7 @@ import { expect } from 'vitest';
 import type { HydratedDocument, Types } from 'mongoose';
 import { z } from 'zod';
 import { ACCESS_COOKIE } from '../src/modules/auth/cookies.js';
+import { positionBetween } from '../src/lib/position.js';
 import { signAccessToken } from '../src/modules/auth/tokens.js';
 import { BoardModel } from '../src/modules/boards/model.js';
 import { CardModel } from '../src/modules/cards/model.js';
@@ -71,19 +72,28 @@ export async function createBoardWithRoles() {
   return { board, owner, member, viewer, outsider };
 }
 
-export async function createList(boardId: Types.ObjectId, position = 'a0') {
-  return ListModel.create({ boardId, title: 'Test List', position });
+/** Positions default to after the last list, so tests never collide on the unique index. */
+export async function createList(boardId: Types.ObjectId, position?: string) {
+  const last = await ListModel.findOne({ boardId }).sort({ position: -1 }).lean();
+  return ListModel.create({
+    boardId,
+    title: 'Test List',
+    position: position ?? positionBetween(last?.position ?? null, null),
+  });
 }
 
+/** Positions default to after the last card in the list, archived ones included. */
 export async function createCard(
   list: { _id: Types.ObjectId; boardId: Types.ObjectId },
-  position = 'a0',
+  overrides: { position?: string; archived?: boolean; title?: string } = {},
 ) {
+  const last = await CardModel.findOne({ listId: list._id }).sort({ position: -1 }).lean();
   return CardModel.create({
     boardId: list.boardId,
     listId: list._id,
-    title: 'Test Card',
-    position,
+    title: overrides.title ?? 'Test Card',
+    archived: overrides.archived ?? false,
+    position: overrides.position ?? positionBetween(last?.position ?? null, null),
   });
 }
 

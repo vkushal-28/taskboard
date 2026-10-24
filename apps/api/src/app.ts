@@ -8,6 +8,7 @@ import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { requireSameOrigin } from './middleware/require-same-origin.js';
 import { createAuthRouter } from './modules/auth/routes.js';
 import { createBoardsRouter } from './modules/boards/routes.js';
+import { createCardsRouter } from './modules/cards/routes.js';
 import { createListsRouter } from './modules/lists/routes.js';
 
 export function createApp() {
@@ -29,6 +30,7 @@ export function createApp() {
   app.use('/auth', createAuthRouter());
   app.use('/boards', createBoardsRouter());
   app.use(createListsRouter());
+  app.use(createCardsRouter());
 
   app.use(notFoundHandler);
   app.use(errorHandler);

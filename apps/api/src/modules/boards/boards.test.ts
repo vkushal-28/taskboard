@@ -104,8 +104,8 @@ describe('GET /boards/:boardId', () => {
     const { board, owner, member, viewer } = await createBoardWithRoles();
     const second = await createList(board._id, 'a1');
     const first = await createList(board._id, 'a0');
-    const later = await createCard(first, 'a1');
-    const earlier = await createCard(first, 'a0');
+    const later = await createCard(first, { position: 'a1' });
+    const earlier = await createCard(first, { position: 'a0' });
     await CardModel.create({
       boardId: board._id,
       listId: second._id,

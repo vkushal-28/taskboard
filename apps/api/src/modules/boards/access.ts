@@ -19,6 +19,14 @@ export async function findBoardIdForCard(cardId: string): Promise<string | null>
   return card ? card.boardId.toString() : null;
 }
 
+/** True when every user id is a member of the board. */
+export async function areBoardMembers(boardId: string, userIds: string[]): Promise<boolean> {
+  const board = await BoardModel.findById(boardId, { 'members.userId': 1 }).lean();
+  if (!board) return false;
+  const memberIds = new Set(board.members.map((member) => member.userId.toString()));
+  return userIds.every((userId) => memberIds.has(userId));
+}
+
 /** The user's role on the board, or null if the board does not exist or they are not a member. */
 export async function findMemberRole(boardId: string, userId: string): Promise<Role | null> {
   if (!isObjectIdOrHexString(boardId)) return null;

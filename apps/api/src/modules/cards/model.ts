@@ -58,7 +58,9 @@ const cardSchema = new Schema<Card>(
   { timestamps: true },
 );
 
-cardSchema.index({ boardId: 1, listId: 1, position: 1 });
+// Unique so two concurrent writes cannot share a position (ADR 007). Archived cards keep
+// their position, so they hold their key too.
+cardSchema.index({ boardId: 1, listId: 1, position: 1 }, { unique: true });
 
 export const CardModel = model<Card>('Card', cardSchema);
 

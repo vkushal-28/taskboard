@@ -19,7 +19,8 @@ const listSchema = new Schema<List>(
   { timestamps: true },
 );
 
-listSchema.index({ boardId: 1, position: 1 });
+// Unique so two concurrent writes cannot share a position (ADR 007).
+listSchema.index({ boardId: 1, position: 1 }, { unique: true });
 
 export const ListModel = model<List>('List', listSchema);
 
