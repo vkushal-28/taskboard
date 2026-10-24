@@ -1,3 +1,4 @@
+import type { ListDto } from '@taskboard/shared';
 import { model, Schema, type Types } from 'mongoose';
 
 export interface List {
@@ -21,3 +22,14 @@ const listSchema = new Schema<List>(
 listSchema.index({ boardId: 1, position: 1 });
 
 export const ListModel = model<List>('List', listSchema);
+
+export function toListDto(
+  list: Pick<List, 'boardId' | 'title' | 'position'> & { _id: Types.ObjectId },
+): ListDto {
+  return {
+    id: list._id.toString(),
+    boardId: list.boardId.toString(),
+    title: list.title,
+    position: list.position,
+  };
+}

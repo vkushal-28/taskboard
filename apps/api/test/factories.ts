@@ -102,6 +102,11 @@ const errorBodySchema = z.object({
 });
 const userBodySchema = z.object({ user: publicUserSchema.strict() });
 
+/** Parses a response body with `schema`, failing the test if the shape is wrong. */
+export function parseBody<T extends z.ZodType>(schema: T, res: request.Response): z.infer<T> {
+  return schema.parse(res.body);
+}
+
 /** Parses `{ error }` from a response body, failing the test if the shape is wrong. */
 export function errorOf(res: request.Response) {
   return errorBodySchema.parse(res.body).error;

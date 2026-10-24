@@ -1,11 +1,9 @@
 import type { LoginInput, RegisterInput } from '@taskboard/shared';
 import type { RequestHandler } from 'express';
 import { getAuthUserId } from '../../middleware/require-auth.js';
+import type { WithBody } from '../../middleware/validate.js';
 import { clearAuthCookies, readCookie, REFRESH_COOKIE, setAuthCookies } from './cookies.js';
 import * as authService from './service.js';
-
-// validateBody() runs before these handlers, so the body type is guaranteed by the route.
-type WithBody<Body> = RequestHandler<Record<string, string>, unknown, Body>;
 
 export const register: WithBody<RegisterInput> = async (req, res) => {
   const { user, tokens } = await authService.register(req.body);

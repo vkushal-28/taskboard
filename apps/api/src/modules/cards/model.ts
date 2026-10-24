@@ -1,3 +1,4 @@
+import type { CardDto } from '@taskboard/shared';
 import { model, Schema, type Types } from 'mongoose';
 
 export interface CardLabel {
@@ -60,3 +61,25 @@ const cardSchema = new Schema<Card>(
 cardSchema.index({ boardId: 1, listId: 1, position: 1 });
 
 export const CardModel = model<Card>('Card', cardSchema);
+
+export function toCardDto(
+  card: Omit<Card, 'createdAt' | 'updatedAt'> & { _id: Types.ObjectId },
+): CardDto {
+  return {
+    id: card._id.toString(),
+    boardId: card.boardId.toString(),
+    listId: card.listId.toString(),
+    title: card.title,
+    description: card.description,
+    position: card.position,
+    labels: card.labels.map(({ name, color }) => ({ name, color })),
+    assignees: card.assignees.map((userId) => userId.toString()),
+    dueDate: card.dueDate ? card.dueDate.toISOString() : null,
+    checklist: card.checklist.map((item) => ({
+      id: item._id.toString(),
+      text: item.text,
+      done: item.done,
+    })),
+    archived: card.archived,
+  };
+}

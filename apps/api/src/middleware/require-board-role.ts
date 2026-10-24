@@ -1,6 +1,7 @@
 import { hasRole, type Role } from '@taskboard/shared';
 import type { Request, RequestHandler } from 'express';
 import { Forbidden, NotFound } from '../lib/errors.js';
+import { stringParam } from '../lib/params.js';
 import {
   findBoardIdForCard,
   findBoardIdForList,
@@ -27,6 +28,14 @@ export function requireBoardRole(minRole: Role): RequestHandler {
   };
 }
 
+/** The board and role requireBoardRole resolved; throws if the route forgot the middleware. */
+export function getBoardContext(req: Request): { boardId: string; role: Role } {
+  if (!req.boardId || !req.boardRole) {
+    throw new Error('getBoardContext called on a route without requireBoardRole');
+  }
+  return { boardId: req.boardId, role: req.boardRole };
+}
+
 /** Returns the board every id in the params points to, or null if any is unknown or they disagree. */
 async function resolveBoardId(params: Request['params']): Promise<string | null> {
   const boardId = stringParam(params.boardId);
@@ -44,9 +53,4 @@ async function resolveBoardId(params: Request['params']): Promise<string | null>
   // A member of board A must not reach board B's card through /boards/A/cards/<B's card>.
   const [first, ...rest] = await Promise.all(lookups);
   return first && rest.every((id) => id === first) ? first : null;
-}
-
-// Express 5 types params as string | string[] because wildcard params are arrays.
-function stringParam(value: string | string[] | undefined): string | undefined {
-  return typeof value === 'string' ? value : undefined;
 }
