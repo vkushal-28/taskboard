@@ -4,7 +4,7 @@ This document explains **what** we are building, **how** we are building it, and
 
 It is a standalone explanation. Nothing in the code depends on it.
 
-_Last updated: 2026-10-23 (Phase 0 done, Phase 1 in progress)._
+_Last updated: 2026-10-23 (Phases 0 and 1 done)._
 
 ---
 
@@ -14,7 +14,7 @@ _Last updated: 2026-10-23 (Phase 0 done, Phase 1 in progress)._
 2. [How the work is organised](#2-how-the-work-is-organised)
 3. [The big picture: how the pieces fit](#3-the-big-picture-how-the-pieces-fit)
 4. [Phase 0 — Setup and foundations (done)](#4-phase-0--setup-and-foundations-done)
-5. [Phase 1 — Authentication (in progress)](#5-phase-1--authentication-in-progress)
+5. [Phase 1 — Authentication (done)](#5-phase-1--authentication-done)
 6. [Phases still to come](#6-phases-still-to-come)
 7. [Every tool and package, and why](#7-every-tool-and-package-and-why)
 8. [Decisions we wrote down (ADRs)](#8-decisions-we-wrote-down-adrs)
@@ -167,7 +167,7 @@ After the four slices, the whole phase was reviewed and six issues were fixed (f
 
 ---
 
-## 5. Phase 1 — Authentication (in progress)
+## 5. Phase 1 — Authentication (done)
 
 **Goal:** people can register, log in, stay logged in across page reloads, and log out — securely.
 
@@ -240,9 +240,9 @@ In a database collection, but only as a **hash** (a one-way fingerprint). If the
 - **Log redaction** extended for the new sensitive fields (tokens, password hashes, cookies).
 - **A decision record** (ADR 004) explaining the token strategy and the alternatives we rejected.
 
-### Slice 1.3 — Tests (done, awaiting commit)
+### Slice 1.3 — Tests (done)
 
-**What we did:** wrote 25 automated tests that call the real api endpoints against a real (temporary) database and check the results.
+**What we did:** wrote 28 automated tests that call the real api endpoints against a real (temporary) database and check the results.
 
 They cover: successful and failed registration, duplicate emails, invalid input, login with right and wrong passwords, cookie security flags, rate limiting, token rotation, the grace window, theft detection (cancelling the whole session), expired and forged tokens, logout, `/me` with and without a login, and the CSRF origin check.
 
@@ -250,7 +250,19 @@ They cover: successful and failed registration, duplicate emails, invalid input,
 
 **Proving the tests work:** we deliberately broke the theft-detection code and confirmed that the matching test failed, then restored it. A test that can't fail is worthless.
 
-The full suite (51 tests) runs in about 6 seconds.
+### Review and finish
+
+The whole phase was reviewed like a strict senior engineer would before a pull request. Fixes made:
+
+- **Two-tab refresh:** the "already rotated" response now has its own error code (`REFRESH_TOKEN_ROTATED`), so the web app can tell it apart from a real logout and simply retry.
+- **Race-condition tests:** two refreshes with the same token at the same moment — exactly one wins. Two sign-ups with the same email at the same moment — exactly one account is created.
+- **Safer production config:** the api refuses to start in production if the web app's address (`CLIENT_URL`) is not set, instead of silently rejecting every request.
+- **Safer error messages:** error messages from third-party libraries are only shown to users when the library marks them as safe.
+- **A real bug caught by a new test:** an email typed or pasted with a space around it was rejected as invalid, because the format was checked before the spaces were removed. Now the email is cleaned first, then checked.
+
+Two smaller items were written down for later phases (proxy settings on the hosting platform, and Safari cookies when running everything in Docker).
+
+The full suite (61 tests) runs in about 6 seconds, and pull request #2 passed CI and was merged.
 
 ---
 
