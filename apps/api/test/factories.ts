@@ -1,10 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { publicUserSchema } from '@taskboard/shared';
+import { publicUserSchema, type Role } from '@taskboard/shared';
 import bcrypt from 'bcryptjs';
 import type { Express } from 'express';
 import request from 'supertest';
 import { expect } from 'vitest';
+import type { HydratedDocument, Types } from 'mongoose';
 import { z } from 'zod';
+import { ACCESS_COOKIE } from '../src/modules/auth/cookies.js';
+import { signAccessToken } from '../src/modules/auth/tokens.js';
+import { BoardModel } from '../src/modules/boards/model.js';
+import { CardModel } from '../src/modules/cards/model.js';
+import { ListModel } from '../src/modules/lists/model.js';
 import { UserModel, type User } from '../src/modules/users/model.js';
 
 export const DEFAULT_PASSWORD = 'correct-horse-battery';
@@ -31,6 +37,54 @@ export async function loginAs(app: Express, email: string, password = DEFAULT_PA
   const res = await agent.post('/auth/login').send({ email, password });
   expect(res.status).toBe(200);
   return agent;
+}
+
+/** A `Cookie` header value that authenticates as `user`, for apps without the auth routes. */
+export async function accessCookieFor(user: HydratedDocument<User>): Promise<string> {
+  return `${ACCESS_COOKIE}=${await signAccessToken(user.id)}`;
+}
+
+export async function createBoard(
+  owner: HydratedDocument<User>,
+  others: { user: HydratedDocument<User>; role: Role }[] = [],
+) {
+  return BoardModel.create({
+    title: 'Test Board',
+    color: '#2563eb',
+    members: [
+      { userId: owner._id, role: 'owner' },
+      ...others.map(({ user, role }) => ({ userId: user._id, role })),
+    ],
+  });
+}
+
+/** A board with one user per role, plus an outsider who is not a member. */
+export async function createBoardWithRoles() {
+  const [owner, member, viewer, outsider] = await Promise.all(
+    ['Owner', 'Member', 'Viewer', 'Outsider'].map((name) => createUser({ name })),
+  );
+  if (!owner || !member || !viewer || !outsider) throw new Error('failed to create users');
+  const board = await createBoard(owner, [
+    { user: member, role: 'member' },
+    { user: viewer, role: 'viewer' },
+  ]);
+  return { board, owner, member, viewer, outsider };
+}
+
+export async function createList(boardId: Types.ObjectId, position = 'a0') {
+  return ListModel.create({ boardId, title: 'Test List', position });
+}
+
+export async function createCard(
+  list: { _id: Types.ObjectId; boardId: Types.ObjectId },
+  position = 'a0',
+) {
+  return CardModel.create({
+    boardId: list.boardId,
+    listId: list._id,
+    title: 'Test Card',
+    position,
+  });
 }
 
 export function getCookie(res: request.Response, name: string): string | undefined {
