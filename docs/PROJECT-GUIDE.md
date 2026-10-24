@@ -4,7 +4,7 @@ This document explains **what** we are building, **how** we are building it, and
 
 It is a standalone explanation. Nothing in the code depends on it.
 
-_Last updated: 2026-10-23 (Phases 0 and 1 done)._
+_Last updated: 2026-10-24 (Phases 0, 1 and 2 done)._
 
 ---
 
@@ -15,10 +15,11 @@ _Last updated: 2026-10-23 (Phases 0 and 1 done)._
 3. [The big picture: how the pieces fit](#3-the-big-picture-how-the-pieces-fit)
 4. [Phase 0 — Setup and foundations (done)](#4-phase-0--setup-and-foundations-done)
 5. [Phase 1 — Authentication (done)](#5-phase-1--authentication-done)
-6. [Phases still to come](#6-phases-still-to-come)
-7. [Every tool and package, and why](#7-every-tool-and-package-and-why)
-8. [Decisions we wrote down (ADRs)](#8-decisions-we-wrote-down-adrs)
-9. [Glossary](#9-glossary)
+6. [Phase 2 — Boards, lists and cards API (done)](#6-phase-2--boards-lists-and-cards-api-done)
+7. [Phases still to come](#7-phases-still-to-come)
+8. [Every tool and package, and why](#8-every-tool-and-package-and-why)
+9. [Decisions we wrote down (ADRs)](#9-decisions-we-wrote-down-adrs)
+10. [Glossary](#10-glossary)
 
 ---
 
@@ -62,7 +63,7 @@ The code is written together with **Claude Code**, an AI coding assistant that r
 | `CLAUDE.md`        | The house rules: stack, architecture rules, code style, how to work.               |
 | `docs/PLAN.md`     | The full plan: every phase and slice, with the exact instructions.                 |
 | `docs/PROGRESS.md` | A logbook: what was done, what is next, lessons learned.                           |
-| `docs/adr/`        | Records of important decisions (see [section 8](#8-decisions-we-wrote-down-adrs)). |
+| `docs/adr/`        | Records of important decisions (see [section 9](#9-decisions-we-wrote-down-adrs)). |
 
 Each session starts by reading the progress log and ends by updating it, so no context is lost between days.
 
@@ -266,20 +267,75 @@ The full suite (61 tests) runs in about 6 seconds, and pull request #2 passed CI
 
 ---
 
-## 6. Phases still to come
+## 6. Phase 2 — Boards, lists and cards API (done)
 
-| Phase                                   | What it adds                                                                                                                                                                 |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **2 — Boards, lists, cards API**        | The data model and REST endpoints, with role checks on every route (viewers can't edit). Card order uses "fractional indexing", so moving a card updates only that one card. |
-| **3 — Frontend board UI**               | Sign-in pages, "My boards" page, and the board screen with drag and drop. Moves update the screen instantly and roll back if the server rejects them.                        |
-| **4 — Real-time sync and presence**     | Socket.IO: changes appear live for everyone on the board, plus "who's online" avatars.                                                                                       |
-| **5 — Card details, comments, invites** | Card detail popup, comments, activity history, and inviting people by email with a role.                                                                                     |
-| **6 — Testing and CI hardening**        | Frontend tests, an end-to-end browser test (Playwright), coverage reports, dependency security checks.                                                                       |
-| **7 — Deploy and polish**               | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states.                                             |
+**Goal:** the data behind every board (boards, lists, cards and a history of changes), reachable through the api, with each person's role on a board checked on every request.
+
+### Slice 2.1 — Data model and permission checks (done)
+
+**What we did:** defined the four kinds of data the app stores:
+
+- **Board:** a title, a colour, and its **members**, each with a role.
+- **List:** a column on a board ("To Do", "In Progress", …).
+- **Card:** a task in a list, with a description, labels, people assigned, a due date and a checklist. Cards can be **archived** (hidden but kept).
+- **Activity:** a log line for every change, such as "Priya moved a card", for the history shown in Phase 5.
+
+**Roles:** every board member is a **viewer** (can only look), a **member** (can add and change lists and cards) or an **owner** (can also rename or delete the board). A single check, `requireBoardRole`, runs before every board request and answers "is this person allowed?".
+
+**Two safety choices:**
+
+- Someone who is **not on the board** gets "not found", not "forbidden". Otherwise anyone could learn which board ids exist by guessing.
+- If a web address mixes ids from two boards (for example, my board's id with a card from someone else's board), the request is refused. This closes a classic trick for reaching data you shouldn't.
+
+### Slice 2.2 — Boards and lists (done)
+
+**What we did:** the endpoints to list your boards (with your role on each), create a board (it starts with three lists: To Do, In Progress, Done), open a board with all its lists and cards in one go, and rename or delete it. Lists can be added, renamed, moved and deleted.
+
+**How ordering works:** each list and card has a **position** like `"a0"`, `"a1"`. To put something between `"a0"` and `"a1"`, it gets a position such as `"a0V"`, which sorts between them. Moving an item changes **only that item**, never its neighbours. This is called **fractional indexing**.
+
+**Out-of-date screens:** if you drag a list while someone else already moved things around, your screen is out of date. The server notices (the neighbours you named are no longer next to each other) and answers "conflict, refresh" instead of putting the list somewhere you didn't mean.
+
+### Slice 2.3 — Cards (done)
+
+**What we did:** cards can be created, opened, edited (title, description, labels, assignees, due date, checklist), archived and restored, moved within or between lists, and deleted. Only board members can be assigned to a card.
+
+**When two people drop a card in the same spot at the same moment:** both would get the same position. The database now **refuses duplicate positions**, and the server then retries with a random free position in the same gap. Both cards land where their users aimed.
+
+**A bug found by a test:** the first retry version stepped up one position at a time. A test that creates five cards at once showed them colliding again and again in a line, until some gave up. Picking a random position for each retry fixed it.
+
+### Slice 2.4 — Permission tests (done)
+
+**What we did:** one test file tries every board request as an owner, a member, a viewer, a stranger and a logged-out visitor, and checks each answer against the table in `docs/permissions.md`. It also checks that **refused requests changed nothing**, and fails if the table and the tests ever disagree.
+
+### Review and finish
+
+The phase was reviewed before merging. Fixes made:
+
+- **Cards with no list:** deleting a list removed the list before its cards. A crash in between, or a card added at that exact moment, could leave cards that pointed to a list that no longer existed, and the board would still show them. Now cards are deleted first, and a board only shows cards whose list exists.
+- **Faster card queries:** some card lookups searched every card of every board instead of using the database index (like reading a whole book instead of the index at the back). They now use the index, which we confirmed with the database's own query report.
+- **A clear error instead of a crash:** editing a card that someone else deleted at the same moment now answers "not found" instead of "something went wrong".
+- **A bug caught by a new test:** activity entries with no details were saved without their details field at all, because the database library drops empty objects by default. That is now switched off for activity.
+- **New tests** for the safety steps the design relies on, such as undoing a half-created board.
+
+Two items were written down for later: limits on how many lists and cards a board can have (Phase 6), and sorting "My boards" by recent activity (Phase 3).
+
+The full suite has about 240 tests.
 
 ---
 
-## 7. Every tool and package, and why
+## 7. Phases still to come
+
+| Phase                                   | What it adds                                                                                                                                          |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **3 — Frontend board UI**               | Sign-in pages, "My boards" page, and the board screen with drag and drop. Moves update the screen instantly and roll back if the server rejects them. |
+| **4 — Real-time sync and presence**     | Socket.IO: changes appear live for everyone on the board, plus "who's online" avatars.                                                                |
+| **5 — Card details, comments, invites** | Card detail popup, comments, activity history, and inviting people by email with a role.                                                              |
+| **6 — Testing and CI hardening**        | Frontend tests, an end-to-end browser test (Playwright), coverage reports, dependency security checks.                                                |
+| **7 — Deploy and polish**               | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states.                      |
+
+---
+
+## 8. Every tool and package, and why
 
 ### Languages and runtime
 
@@ -291,19 +347,20 @@ The full suite (61 tests) runs in about 6 seconds, and pull request #2 passed CI
 
 ### Backend (`apps/api`)
 
-| Package                | Why                                                                                                                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Express 5**          | The most widely known Node web framework. Version 5 automatically catches errors from `async` code.                                                                                  |
-| **Mongoose**           | Defines the shape of MongoDB data and talks to the database.                                                                                                                         |
-| **Zod**                | Validates input (request bodies, settings) and generates TypeScript types from the same rules.                                                                                       |
-| **Pino**               | Very fast structured logging, with automatic redaction of secrets. `pino-pretty` makes logs readable during development.                                                             |
-| **jose**               | Creates and verifies JWT access tokens. Modern, typed, no dependencies. Chosen over `jsonwebtoken`, which is older-style and needs separate type files.                              |
-| **bcryptjs**           | Hashes passwords so they're never stored in plain text. Pure JavaScript, so no native compilation step. Chosen over `bcrypt`, which needs a compiler and an approved install script. |
-| **cookie-parser**      | Reads cookies from incoming requests.                                                                                                                                                |
-| **helmet**             | Adds security-related HTTP headers with one line.                                                                                                                                    |
-| **cors**               | Allows only our web app's address to call the api with cookies.                                                                                                                      |
-| **express-rate-limit** | Limits how often one IP address can try to log in.                                                                                                                                   |
-| **tsx**                | Runs TypeScript directly in development and restarts on file changes.                                                                                                                |
+| Package                 | Why                                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Express 5**           | The most widely known Node web framework. Version 5 automatically catches errors from `async` code.                                                                                  |
+| **Mongoose**            | Defines the shape of MongoDB data and talks to the database.                                                                                                                         |
+| **Zod**                 | Validates input (request bodies, settings) and generates TypeScript types from the same rules.                                                                                       |
+| **Pino**                | Very fast structured logging, with automatic redaction of secrets. `pino-pretty` makes logs readable during development.                                                             |
+| **jose**                | Creates and verifies JWT access tokens. Modern, typed, no dependencies. Chosen over `jsonwebtoken`, which is older-style and needs separate type files.                              |
+| **bcryptjs**            | Hashes passwords so they're never stored in plain text. Pure JavaScript, so no native compilation step. Chosen over `bcrypt`, which needs a compiler and an approved install script. |
+| **cookie-parser**       | Reads cookies from incoming requests.                                                                                                                                                |
+| **helmet**              | Adds security-related HTTP headers with one line.                                                                                                                                    |
+| **cors**                | Allows only our web app's address to call the api with cookies.                                                                                                                      |
+| **express-rate-limit**  | Limits how often one IP address can try to log in.                                                                                                                                   |
+| **tsx**                 | Runs TypeScript directly in development and restarts on file changes.                                                                                                                |
+| **fractional-indexing** | Creates sortable position strings, so a card can move between two others by changing only itself. Tiny, with no dependencies of its own.                                             |
 
 ### Frontend (`apps/web`)
 
@@ -342,20 +399,23 @@ The full suite (61 tests) runs in about 6 seconds, and pull request #2 passed CI
 
 ---
 
-## 8. Decisions we wrote down (ADRs)
+## 9. Decisions we wrote down (ADRs)
 
 An **ADR** (Architecture Decision Record) is a short document that records an important choice: the problem, the decision, the alternatives, and the trade-offs. It answers "why did we do it this way?" long after everyone has forgotten.
 
-| ADR | Decision                          | In one sentence                                                                                                                        |
-| --- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 001 | TanStack Query + Zustand          | Server data is cached by TanStack Query; the tiny bit of pure UI state lives in Zustand — less boilerplate than Redux.                 |
-| 002 | Pin TypeScript 6                  | The linter that catches async bugs doesn't support TypeScript 7 yet, so we wait.                                                       |
-| 003 | Shared package from source in dev | In development, tools read the shared package's TypeScript directly (instant changes); in production, Node reads the compiled version. |
-| 004 | Auth token strategy               | Short JWT access token + rotating random refresh token, both in httpOnly cookies, with theft detection.                                |
+| ADR | Decision                            | In one sentence                                                                                                                        |
+| --- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 001 | TanStack Query + Zustand            | Server data is cached by TanStack Query; the tiny bit of pure UI state lives in Zustand — less boilerplate than Redux.                 |
+| 002 | Pin TypeScript 6                    | The linter that catches async bugs doesn't support TypeScript 7 yet, so we wait.                                                       |
+| 003 | Shared package from source in dev   | In development, tools read the shared package's TypeScript directly (instant changes); in production, Node reads the compiled version. |
+| 004 | Auth token strategy                 | Short JWT access token + rotating random refresh token, both in httpOnly cookies, with theft detection.                                |
+| 005 | Board members inside the board      | Each board stores its members and their roles itself; people who aren't members get "not found".                                       |
+| 006 | No multi-step database transactions | Writes that touch several collections are ordered so a crash midway leaves nothing anyone can see or reach.                            |
+| 007 | Unique positions with retry         | The database refuses two items in the same spot; the server retries at a random free spot nearby.                                      |
 
 ---
 
-## 9. Glossary
+## 10. Glossary
 
 | Term                    | Meaning                                                                                                                                            |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -378,4 +438,7 @@ An **ADR** (Architecture Decision Record) is a short document that records an im
 | **Docker container**    | A lightweight, isolated box that runs a program the same way on every machine.                                                                     |
 | **Pull request (PR)**   | A proposal to merge a branch into `main`, reviewed and checked before merging.                                                                     |
 | **Fractional indexing** | Giving items sortable positions like `"a0"`, `"a0V"`, `"a1"` so an item can be placed between two others by changing only itself.                  |
+| **Role (RBAC)**         | Role-based access control: what you may do depends on your role on the board (viewer, member or owner).                                            |
+| **Database index**      | A sorted lookup table the database keeps so it can find matching records without reading every one.                                                |
+| **Race condition**      | Two things happening at the same moment and getting in each other's way, such as two people dropping a card in the same spot.                      |
 | **Optimistic update**   | Showing a change on screen immediately, before the server confirms it, and undoing it if the server says no.                                       |
