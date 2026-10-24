@@ -27,6 +27,8 @@ Every board-scoped route needs a signed-in user first:
 
 `GET /boards` and `POST /boards` are not board-scoped: they only need `requireAuth`. `GET /boards` returns only boards the user is a member of.
 
-A move whose target `listId` is on another board is rejected by the cards service (Slice 2.3), not by the middleware, because the target is in the body, not the url.
+Archiving and restoring a card is `PATCH /cards/:cardId` with `{ archived }`, so it needs member like any other card edit.
+
+A move whose target `listId` is on another board is rejected by the cards service with 409 (Slice 2.3), not by the middleware, because the target is in the body, not the url.
 
 Phase 5 adds invites, member role changes and member removal (owner only) to this table.
