@@ -8,6 +8,7 @@ RUN pnpm install --frozen-lockfile --filter @taskboard/web...
 COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/web apps/web
+ARG VITE_API_URL
 RUN pnpm --filter @taskboard/web build
 
 FROM nginx:1.29-alpine
