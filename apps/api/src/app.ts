@@ -6,6 +6,7 @@ import { env } from './config/env.js';
 import { getDbStatus } from './db/mongoose.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { requireSameOrigin } from './middleware/require-same-origin.js';
+import { createActivityRouter } from './modules/activity/routes.js';
 import { createAuthRouter } from './modules/auth/routes.js';
 import { createBoardsRouter } from './modules/boards/routes.js';
 import { createCardsRouter } from './modules/cards/routes.js';
@@ -28,6 +29,7 @@ export function createApp() {
   });
 
   app.use('/auth', createAuthRouter());
+  app.use('/activity', createActivityRouter());
   app.use('/boards', createBoardsRouter());
   app.use(createListsRouter());
   app.use(createCardsRouter());

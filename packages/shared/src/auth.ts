@@ -29,6 +29,9 @@ export const publicUserSchema = z.object({
   email: z.string(),
 });
 
+// Body of register, login and GET /auth/me.
+export const authUserResponseSchema = z.object({ user: publicUserSchema });
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type PublicUser = z.infer<typeof publicUserSchema>;
