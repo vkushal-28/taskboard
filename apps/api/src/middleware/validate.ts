@@ -16,3 +16,11 @@ export function validateBody(schema: z.ZodType): RequestHandler {
     next();
   };
 }
+
+// Express 5 makes req.query a read-only getter, so query strings are parsed in the controller
+// instead of being replaced by middleware.
+export function parseQuery<T>(schema: z.ZodType<T>, query: unknown): T {
+  const result = schema.safeParse(query);
+  if (!result.success) throw new ValidationError(z.flattenError(result.error));
+  return result.data;
+}
