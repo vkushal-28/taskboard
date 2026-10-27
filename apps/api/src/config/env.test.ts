@@ -13,6 +13,7 @@ describe('parseEnv', () => {
       LOG_LEVEL: 'info',
       JWT_ACCESS_SECRET: SECRET,
       CLIENT_URL: 'http://localhost:5173',
+      COOKIE_SECURE: false,
     });
   });
 
@@ -50,5 +51,35 @@ describe('parseEnv', () => {
 
   it('rejects a CLIENT_URL that is not a URL', () => {
     expect(() => parseEnv({ ...required, CLIENT_URL: 'localhost' })).toThrow(/CLIENT_URL/);
+  });
+
+  it.each([
+    ['development', undefined, false],
+    ['production', undefined, true],
+    ['production', 'false', false],
+    ['development', 'true', true],
+  ])('in %s with COOKIE_SECURE=%s, cookies are secure: %s', (NODE_ENV, COOKIE_SECURE, secure) => {
+    const env = parseEnv({
+      ...required,
+      NODE_ENV,
+      CLIENT_URL: 'http://localhost:8080',
+      ...(COOKIE_SECURE === undefined ? {} : { COOKIE_SECURE }),
+    });
+    expect(env.COOKIE_SECURE).toBe(secure);
+  });
+
+  it('rejects COOKIE_SECURE=false for an https CLIENT_URL', () => {
+    expect(() =>
+      parseEnv({
+        ...required,
+        NODE_ENV: 'production',
+        CLIENT_URL: 'https://app.example.com',
+        COOKIE_SECURE: 'false',
+      }),
+    ).toThrow(/COOKIE_SECURE/);
+  });
+
+  it('rejects a COOKIE_SECURE that is not a boolean', () => {
+    expect(() => parseEnv({ ...required, COOKIE_SECURE: 'sometimes' })).toThrow(/COOKIE_SECURE/);
   });
 });

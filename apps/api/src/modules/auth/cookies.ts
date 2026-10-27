@@ -9,14 +9,15 @@ export const REFRESH_COOKIE = 'tb_refresh';
 const REFRESH_COOKIE_PATH = '/auth';
 
 // In production the web (Vercel) and api (Render) are on different sites, which needs
-// SameSite=None + Secure for cookies to be sent at all. See ADR 004.
+// SameSite=None + Secure for cookies to be sent at all (ADR 004). Browsers reject SameSite=None
+// without Secure, so insecure cookies fall back to Lax, which works when web and api share a
+// site (localhost in dev and in the Docker stack).
+export function cookieFlags(secure: boolean): CookieOptions {
+  return { httpOnly: true, secure, sameSite: secure ? 'none' : 'lax' };
+}
+
 function baseCookieOptions(): CookieOptions {
-  const production = env.NODE_ENV === 'production';
-  return {
-    httpOnly: true,
-    secure: production,
-    sameSite: production ? 'none' : 'lax',
-  };
+  return cookieFlags(env.COOKIE_SECURE);
 }
 
 export function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
