@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { boardDetail, card, list, MEMBER } from '../../test/board-fixtures';
@@ -118,5 +118,34 @@ describe('Board page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This board does not exist or is not shared with you.',
     );
+  });
+
+  it('closes the inline form on Escape', async () => {
+    stubBoard();
+    renderApp('/b/b1');
+    const user = userEvent.setup();
+
+    const todo = within(await screen.findByRole('region', { name: 'To Do' }));
+    await user.click(todo.getByRole('button', { name: '+ Add a card' }));
+    await user.keyboard('{Escape}');
+
+    expect(todo.queryByLabelText('Card title')).not.toBeInTheDocument();
+    expect(todo.getByRole('button', { name: '+ Add a card' })).toBeVisible();
+  });
+
+  it('does not add a card twice when it is already on the board', async () => {
+    // Phase 4: a socket event can deliver the card before the POST response does.
+    stubBoard(boardDetail(), {
+      'POST /lists/l1/cards': () => json(201, { card: card('c1', 'l1', 'a0') }),
+    });
+    renderApp('/b/b1');
+    const user = userEvent.setup();
+
+    const todo = within(await screen.findByRole('region', { name: 'To Do' }));
+    await user.click(todo.getByRole('button', { name: '+ Add a card' }));
+    await user.type(todo.getByLabelText('Card title'), 'Card c1{Enter}');
+
+    await waitFor(() => expect(todo.getByLabelText('Card title')).toHaveValue(''));
+    expect(cardTitles('To Do')).toEqual(['Card c1', 'Card c2', 'Card c3']);
   });
 });

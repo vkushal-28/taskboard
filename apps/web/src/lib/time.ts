@@ -11,8 +11,8 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 
 const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
-/** "just now", "5 minutes ago", "yesterday", "3 weeks ago". */
-export function formatRelative(iso: string, now: number = Date.now()): string {
+/** "just now", "5 minutes ago", "yesterday", "3 weeks ago". Pass `now` from useNow(). */
+export function formatRelative(iso: string, now: number): string {
   const seconds = Math.round((Date.parse(iso) - now) / 1000);
   for (const [unit, size] of UNITS) {
     if (Math.abs(seconds) >= size) return formatter.format(Math.trunc(seconds / size), unit);

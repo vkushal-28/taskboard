@@ -19,13 +19,15 @@ interface ListColumnProps {
 }
 
 export function ListColumn({ boardId, list, cards, members, canEdit }: ListColumnProps) {
-  // The list itself is a drop target too, so a card can be dropped into an empty list.
+  // The whole column is a drop target, so a card can be dropped into an empty list, below the
+  // last card or on the header; dropOrder() puts it last.
   const { setNodeRef, isOver } = useDroppable({ id: list.id, data: { type: 'list' } });
   const createCard = useCreateCard(boardId, list.id);
   const headingId = `list-${list.id}`;
 
   return (
     <section
+      ref={setNodeRef}
       aria-labelledby={headingId}
       data-testid={`list-${list.id}`}
       className="flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100"
@@ -39,7 +41,6 @@ export function ListColumn({ boardId, list, cards, members, canEdit }: ListColum
 
       <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
         <ol
-          ref={setNodeRef}
           className={`min-h-12 flex-1 space-y-2 overflow-y-auto px-3 pb-2 ${
             isOver && cards.length === 0 ? 'rounded-lg bg-indigo-50' : ''
           }`}

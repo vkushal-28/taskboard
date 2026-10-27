@@ -1,6 +1,8 @@
 import { createListSchema, hasRole, type BoardDetail } from '@taskboard/shared';
 import {
   closestCorners,
+  pointerWithin,
+  type CollisionDetection,
   DndContext,
   DragOverlay,
   KeyboardSensor,
@@ -11,13 +13,13 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useMemo, useState } from 'react';
 import { useCreateList, useMoveCard } from './api';
 import { CardTile } from './CardTile';
 import { InlineAddForm } from './InlineAddForm';
 import { ListColumn } from './ListColumn';
-import { byPosition, findListOf, groupCards, planMove, type Columns } from './ordering';
+import { byPosition, dropOrder, findListOf, groupCards, planMove, type Columns } from './ordering';
 
 // Below this distance a press is a click, not a drag (Phase 5 opens the card on click).
 const DRAG_ACTIVATION_PX = 5;
@@ -79,10 +81,8 @@ export function BoardCanvas({ detail }: { detail: BoardDetail }) {
     const listId = working && findListOf(working, cardId);
     if (!over || !working || !listId) return setDrag(null);
 
-    const ids = working[listId] ?? [];
-    const from = ids.indexOf(cardId);
-    const overIndex = ids.indexOf(String(over.id));
-    const finalIds = overIndex === -1 ? ids : arrayMove(ids, from, overIndex);
+    const overIsList = over.data.current?.type === 'list';
+    const finalIds = dropOrder(working[listId] ?? [], cardId, String(over.id), overIsList);
 
     const plan = planMove(detail, cardId, listId, finalIds.indexOf(cardId));
     if (!plan) return setDrag(null);
@@ -99,7 +99,7 @@ export function BoardCanvas({ detail }: { detail: BoardDetail }) {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={pointerFirst}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -141,6 +141,18 @@ export function BoardCanvas({ detail }: { detail: BoardDetail }) {
     </DndContext>
   );
 }
+
+/**
+ * Whatever is under the pointer wins. Over a card inside a column both match, and the card
+ * comes first because its corners are nearer the pointer. Over the empty part of a column only
+ * the column matches, so the card goes last. closestCorners alone can pick the neighbouring
+ * column near the bottom of a list, because that column's corner is closer. Keyboard drags have
+ * no pointer and use closestCorners.
+ */
+const pointerFirst: CollisionDetection = (args) => {
+  const underPointer = pointerWithin(args);
+  return underPointer.length > 0 ? underPointer : closestCorners(args);
+};
 
 /** Moves the card into the hovered list, before the hovered card or at the end. */
 function moveAcross(columns: Columns, cardId: string, overId: string, overType: unknown): Columns {

@@ -12,6 +12,12 @@ import { showToast } from '../../lib/toast-store';
 import { boardKeys } from '../boards/api';
 import { applyMove, replaceCard, type MovePlan } from './ordering';
 
+// Idempotent, so an item that already arrived (Phase 4: a socket event, or a refetch after a
+// reconnect) is not added twice.
+function appendIfMissing<T extends { id: string }>(items: T[], item: T): T[] {
+  return items.some((existing) => existing.id === item.id) ? items : [...items, item];
+}
+
 export const MOVE_FAILED_MESSAGE = 'Could not move the card, so it went back to where it was.';
 
 export function useCreateCard(boardId: string, listId: string) {
@@ -25,7 +31,7 @@ export function useCreateCard(boardId: string, listId: string) {
       }),
     onSuccess: ({ card }) =>
       queryClient.setQueryData<BoardDetail>(boardKeys.detail(boardId), (detail) =>
-        detail ? { ...detail, cards: [...detail.cards, card] } : detail,
+        detail ? { ...detail, cards: appendIfMissing(detail.cards, card) } : detail,
       ),
   });
 }
@@ -41,7 +47,7 @@ export function useCreateList(boardId: string) {
       }),
     onSuccess: ({ list }) =>
       queryClient.setQueryData<BoardDetail>(boardKeys.detail(boardId), (detail) =>
-        detail ? { ...detail, lists: [...detail.lists, list] } : detail,
+        detail ? { ...detail, lists: appendIfMissing(detail.lists, list) } : detail,
       ),
   });
 }

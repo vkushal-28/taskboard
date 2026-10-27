@@ -22,6 +22,8 @@ services:
       NODE_ENV: production
       MONGODB_URI: mongodb://mongo:27017/taskboard
       CLIENT_URL: http://localhost:8080
+      # Production build over plain http: Secure cookies would be dropped by Safari.
+      COOKIE_SECURE: 'false'
     ports:
       - '4000:4000'
     depends_on:

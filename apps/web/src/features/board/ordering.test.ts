@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { boardDetail, card } from '../../test/board-fixtures';
-import { applyMove, groupCards, planMove, type MovePlan } from './ordering';
+import { applyMove, dropOrder, groupCards, planMove, type MovePlan } from './ordering';
 
 function columnsAfter(plan: MovePlan | null) {
   if (!plan) throw new Error('expected a move');
@@ -68,5 +68,27 @@ describe('planMove', () => {
   it('returns null for an unknown card or list', () => {
     expect(planMove(boardDetail(), 'nope', 'l1', 0)).toBeNull();
     expect(planMove(boardDetail(), 'c1', 'nope', 0)).toBeNull();
+  });
+});
+
+describe('dropOrder', () => {
+  const ids = ['c1', 'c2', 'c3'];
+
+  it.each([
+    ['down onto a later card', 'c1', 'c3', ['c2', 'c3', 'c1']],
+    ['up onto an earlier card', 'c3', 'c1', ['c3', 'c1', 'c2']],
+    ['onto itself', 'c2', 'c2', ['c1', 'c2', 'c3']],
+  ])('takes the slot of the card it was dropped on (%s)', (_case, cardId, overId, expected) => {
+    expect(dropOrder(ids, cardId, overId, false)).toEqual(expected);
+  });
+
+  it('puts the card last when it is dropped on the list itself', () => {
+    expect(dropOrder(ids, 'c1', 'l1', true)).toEqual(['c2', 'c3', 'c1']);
+    expect(dropOrder(ids, 'c3', 'l1', true)).toEqual(ids);
+  });
+
+  it('leaves the order alone when the card or the drop target is not in the list', () => {
+    expect(dropOrder(ids, 'c9', 'c1', false)).toEqual(ids);
+    expect(dropOrder(ids, 'c1', 'c9', false)).toEqual(ids);
   });
 });

@@ -7,6 +7,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { isApiError } from '../../lib/api-error';
+import { showToast } from '../../lib/toast-store';
 import { authKeys, clearSession } from './keys';
 
 // "Not signed in" is a normal state, not an error, so a 401 resolves to null.
@@ -53,11 +54,15 @@ export function useRegister() {
   });
 }
 
+export const SIGN_OUT_FAILED_MESSAGE = 'Could not sign out. Check your connection and try again.';
+
 export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api.request('/auth/logout', { method: 'POST' }),
-    // Settled, not success: if the network call fails, the user still expects to be signed out here.
-    onSettled: () => clearSession(queryClient),
+    onSuccess: () => clearSession(queryClient),
+    // The cookies are httpOnly, so only the server can end the session. Showing the user as
+    // signed out after a failed request would be a lie: a reload would sign them back in.
+    onError: () => showToast(SIGN_OUT_FAILED_MESSAGE),
   });
 }
