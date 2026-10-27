@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { errorResponse, json, noContent, urlOf } from '../../test/http';
 import { emptyHomeHandlers, renderApp, stubApi } from '../../test/render';
+import { SIGN_OUT_FAILED_MESSAGE } from './api';
 import { DEMO_CREDENTIALS } from './SignInPage';
 
 const priya = { id: 'u1', name: 'Priya', email: 'priya@acme.dev' };
@@ -177,5 +178,21 @@ describe('sign out', () => {
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
+  });
+
+  it('keeps the user signed in and says so when sign-out fails', async () => {
+    stubApi({
+      ...emptyHomeHandlers,
+      'GET /auth/me': () => json(200, { user: priya }),
+      'POST /auth/logout': () => errorResponse(500, 'INTERNAL'),
+    });
+    const { router } = renderApp('/');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByLabelText('Account menu'));
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(SIGN_OUT_FAILED_MESSAGE);
+    expect(router.state.location.pathname).toBe('/');
   });
 });

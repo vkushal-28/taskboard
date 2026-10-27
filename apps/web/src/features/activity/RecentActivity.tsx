@@ -1,11 +1,12 @@
 import { Link } from 'react-router';
 import { Avatar } from '../../components/Avatar';
-import { formatRelative } from '../../lib/time';
+import { formatRelative, useNow } from '../../lib/time';
 import { useRecentActivity } from './api';
 import { describeActivity } from './describe';
 
 export function RecentActivity() {
   const activity = useRecentActivity();
+  const now = useNow();
 
   return (
     <section
@@ -49,7 +50,7 @@ export function RecentActivity() {
                     {item.board.title}
                   </Link>
                   <span aria-hidden="true">·</span>
-                  <time dateTime={item.createdAt}>{formatRelative(item.createdAt)}</time>
+                  <time dateTime={item.createdAt}>{formatRelative(item.createdAt, now)}</time>
                 </p>
               </div>
             </li>

@@ -2,7 +2,7 @@ import type { BoardSummary } from '@taskboard/shared';
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { AppHeader } from '../../components/AppHeader';
-import { greetingFor } from '../../lib/time';
+import { greetingFor, useNow } from '../../lib/time';
 import { RecentActivity } from '../activity/RecentActivity';
 import { useAuth } from '../auth/api';
 import { useBoards } from './api';
@@ -12,6 +12,7 @@ import { CreateBoardDialog } from './CreateBoardDialog';
 export function MyBoardsPage() {
   const { user } = useAuth();
   const boards = useBoards();
+  const now = useNow();
   const [creating, setCreating] = useState(false);
   // The search lives in the URL, so it survives a reload and the back button.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,7 +36,7 @@ export function MyBoardsPage() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold text-slate-900">
-                {greetingFor(new Date())}, {firstName}
+                {greetingFor(new Date(now))}, {firstName}
               </h1>
               <p className="mt-1 text-sm text-slate-600">Here is what your teams are working on.</p>
             </div>

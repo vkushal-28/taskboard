@@ -177,4 +177,19 @@ describe('Create board dialog', () => {
     await user.click(screen.getByRole('button', { name: 'New board' }));
     expect(screen.getByLabelText('Board title')).toHaveValue('');
   });
+
+  it('closes when the backdrop is clicked, but not when the form is', async () => {
+    stubHome();
+    renderApp('/');
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'New board' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create board' });
+    await user.click(screen.getByLabelText('Board title'));
+    expect(dialog).toHaveAttribute('open');
+
+    // The <dialog> element itself only receives clicks outside its content, on the backdrop.
+    await user.click(dialog);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

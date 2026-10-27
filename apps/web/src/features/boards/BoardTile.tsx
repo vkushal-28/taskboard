@@ -1,9 +1,10 @@
 import type { BoardSummary } from '@taskboard/shared';
 import { Link } from 'react-router';
 import { RoleBadge } from '../../components/RoleBadge';
-import { formatRelative } from '../../lib/time';
+import { formatRelative, useNow } from '../../lib/time';
 
 export function BoardTile({ board }: { board: BoardSummary }) {
+  const now = useNow();
   return (
     <Link
       to={`/b/${board.id}`}
@@ -18,7 +19,9 @@ export function BoardTile({ board }: { board: BoardSummary }) {
           </h3>
           <RoleBadge role={board.role} />
         </div>
-        <p className="mt-1 text-xs text-slate-500">Updated {formatRelative(board.updatedAt)}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Updated {formatRelative(board.updatedAt, now)}
+        </p>
       </div>
     </Link>
   );
