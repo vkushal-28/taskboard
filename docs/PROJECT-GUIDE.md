@@ -16,10 +16,11 @@ _Last updated: 2026-10-24 (Phases 0, 1 and 2 done)._
 4. [Phase 0 — Setup and foundations (done)](#4-phase-0--setup-and-foundations-done)
 5. [Phase 1 — Authentication (done)](#5-phase-1--authentication-done)
 6. [Phase 2 — Boards, lists and cards API (done)](#6-phase-2--boards-lists-and-cards-api-done)
-7. [Phases still to come](#7-phases-still-to-come)
-8. [Every tool and package, and why](#8-every-tool-and-package-and-why)
-9. [Decisions we wrote down (ADRs)](#9-decisions-we-wrote-down-adrs)
-10. [Glossary](#10-glossary)
+7. [Phase 3 — The web app: sign in, My boards, the board (done)](#7-phase-3--the-web-app-sign-in-my-boards-the-board-done)
+8. [Phases still to come](#8-phases-still-to-come)
+9. [Every tool and package, and why](#9-every-tool-and-package-and-why)
+10. [Decisions we wrote down (ADRs)](#10-decisions-we-wrote-down-adrs)
+11. [Glossary](#11-glossary)
 
 ---
 
@@ -323,19 +324,65 @@ The full suite has about 240 tests.
 
 ---
 
-## 7. Phases still to come
+## 7. Phase 3 — The web app: sign in, My boards, the board (done)
 
-| Phase                                   | What it adds                                                                                                                                          |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **3 — Frontend board UI**               | Sign-in pages, "My boards" page, and the board screen with drag and drop. Moves update the screen instantly and roll back if the server rejects them. |
-| **4 — Real-time sync and presence**     | Socket.IO: changes appear live for everyone on the board, plus "who's online" avatars.                                                                |
-| **5 — Card details, comments, invites** | Card detail popup, comments, activity history, and inviting people by email with a role.                                                              |
-| **6 — Testing and CI hardening**        | Frontend tests, an end-to-end browser test (Playwright), coverage reports, dependency security checks.                                                |
-| **7 — Deploy and polish**               | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states.                      |
+**Goal:** everything from Phases 1 and 2, usable in a browser: sign in, see your boards, open one, and drag cards around.
+
+### Slice 3.1 — App shell and sign-in (done)
+
+**What we did:** the pages and the plumbing every later screen uses.
+
+- **Pages and guards:** React Router decides which page to show. "Guards" send signed-out visitors to the sign-in page, and after signing in, back to the page they first asked for.
+- **One way to call the api:** every request sends the login cookies. If the short access token has expired, the client quietly gets a new one and repeats the request once. If several requests notice at the same moment, they share one refresh, because two would look like a stolen token to the server (Phase 1's theft check). If another browser tab refreshed a moment earlier, the request is simply retried instead of signing you out.
+- **Remembering server data:** TanStack Query keeps the answers from the api (your user, your boards) and shares them across the app. Signing out throws all of it away, so the next person on the same computer never sees the previous person's boards.
+- **Sign in and Register pages** use the same validation rules as the server, so mistakes show before anything is sent.
+
+**Things we learned:**
+
+- The newest React Router (version 8) needs React 19, and we're on React 18. pnpm installed it anyway with only a warning, so we pinned version 7 (ADR 008).
+- A first test of signing out failed: the page stayed on the board list. Clearing the whole cache had also removed the very thing the guards were watching, so they never noticed the user was gone. Now the user entry is set to "nobody" in place.
+- Registering failed at first with "Something went wrong". An old Docker copy of the api, built in Phase 0 with no sign-in routes, was holding port 4000. Stopping it fixed it.
+
+### Slice 3.2 — My boards (done)
+
+**What we did:** the home page. A greeting, "Your boards" (ones you own) and "Shared with you" (the rest), each with a role badge, a search box, a "Create board" dialog, and a **Recent activity** list ("Alex moved 'Login page' to Done").
+
+**A small new api endpoint:** recent activity across all your boards didn't exist yet, so we added `GET /activity/recent`. It fills in names and titles on the server, using one database query per kind of thing (people, cards, lists) rather than one per line. We checked with the database's query report that it reads only the 10 newest entries straight from the index.
+
+### Slice 3.3 — The board and drag and drop (done)
+
+**What we did:** the board screen. Lists side by side, and cards showing labels, due dates (red when overdue), checklist progress and who's assigned. You can add cards and lists inline, and drag cards within a list or to another list, with the mouse or the keyboard (Space to pick up, arrows to move). Viewers see the board but can't drag or add anything.
+
+**Instant moves ("optimistic updates"):** when you drop a card, the screen changes at once, before the server has answered. If the server agrees, we keep its exact copy of the card. If it refuses, or the network fails, the card jumps back, a message explains why, and the board is reloaded from the server (ADR 009).
+
+**A bug you spotted:** after a drop, the card seemed to fly back to its old list before landing in the new one. For about 5 milliseconds the screen really did show the old order: the drag's temporary copy was thrown away a moment before the instant update arrived. The fix keeps the temporary copy on screen until the update has landed.
+
+### Review and finish
+
+The phase was reviewed after merging, and the fixes went in a follow-up PR:
+
+- **Dropping below the last card** didn't always move the card to the end of its list, because the drop area was only as tall as the cards. Now the whole column is a drop target. That first made a card near the bottom of a list sometimes jump to the **neighbouring** list, which we caught by testing in a real browser. The fix is to ask "what's under the pointer?" first.
+- **Signing in through Docker in Safari:** the Docker setup runs the production build over plain `http`, so cookies were marked "https only" and Safari refused them. A new setting, `COOKIE_SECURE`, turns that off for Docker only; the server refuses to start if it's switched off for a real `https` site.
+- **No duplicate cards:** adding a card that's already on screen (which live updates in Phase 4 could cause) is ignored.
+- **Honest sign-out:** if signing out fails, you stay signed in and are told so. Before, the screen showed you as signed out while your cookies still worked.
+- **More tests**, and two new decision records (ADRs 008 and 009).
+
+The full suite has about 340 tests.
 
 ---
 
-## 8. Every tool and package, and why
+## 8. Phases still to come
+
+| Phase                                   | What it adds                                                                                                                     |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **4 — Real-time sync and presence**     | Socket.IO: changes appear live for everyone on the board, plus "who's online" avatars.                                           |
+| **5 — Card details, comments, invites** | Card detail popup, comments, activity history, and inviting people by email with a role.                                         |
+| **6 — Testing and CI hardening**        | Frontend tests, an end-to-end browser test (Playwright), coverage reports, dependency security checks.                           |
+| **7 — Deploy and polish**               | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states. |
+
+---
+
+## 9. Every tool and package, and why
 
 ### Languages and runtime
 
@@ -364,21 +411,27 @@ The full suite has about 240 tests.
 
 ### Frontend (`apps/web`)
 
-| Package                                                                    | Why                                                                                               |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **React 18**                                                               | The most common UI library; component-based.                                                      |
-| **Vite**                                                                   | Starts the dev server instantly and builds a small production bundle.                             |
-| **Tailwind CSS**                                                           | Style elements with small utility classes directly in the markup; consistent spacing and colours. |
-| _Planned:_ TanStack Query, Zustand, React Router, React Hook Form, dnd-kit | Server data caching, small UI state, page routing, forms, and drag and drop (see ADR 001).        |
+| Package                                       | Why                                                                                                               |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **React 18**                                  | The most common UI library; component-based.                                                                      |
+| **Vite**                                      | Starts the dev server instantly and builds a small production bundle.                                             |
+| **Tailwind CSS**                              | Style elements with small utility classes directly in the markup; consistent spacing and colours.                 |
+| **React Router 7**                            | Chooses the page for each address and guards the signed-in pages. Pinned to 7 because 8 needs React 19 (ADR 008). |
+| **TanStack Query**                            | Caches the api's answers and shares them across the app; powers the instant card moves (ADR 001, ADR 009).        |
+| **Zustand**                                   | Holds the small bits of pure UI state, currently the pop-up messages ("toasts").                                  |
+| **React Hook Form** + **@hookform/resolvers** | Forms that check input with the same Zod rules the server uses.                                                   |
+| **dnd-kit** (`core`, `sortable`, `utilities`) | Drag and drop with mouse, touch and keyboard.                                                                     |
+| **fractional-indexing**                       | The same position strings as the api, so a dropped card gets a temporary spot before the server answers.          |
 
 ### Testing
 
-| Package                                      | Why                                                                                                                                                                                                                                     |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Vitest**                                   | Fast test runner that understands TypeScript out of the box.                                                                                                                                                                            |
-| **Supertest**                                | Sends real HTTP requests to the api inside tests, without starting a network server.                                                                                                                                                    |
-| **mongodb-memory-server**                    | Starts a temporary real MongoDB for tests. Each run starts clean, and CI needs no database service. Its install script (which would download MongoDB on every install) is turned off; it downloads once, lazily, on the first test run. |
-| _Planned:_ React Testing Library, Playwright | Testing components like a user would, and clicking through the real app in a browser.                                                                                                                                                   |
+| Package                               | Why                                                                                                                                                                                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vitest**                            | Fast test runner that understands TypeScript out of the box.                                                                                                                                                                            |
+| **Supertest**                         | Sends real HTTP requests to the api inside tests, without starting a network server.                                                                                                                                                    |
+| **mongodb-memory-server**             | Starts a temporary real MongoDB for tests. Each run starts clean, and CI needs no database service. Its install script (which would download MongoDB on every install) is turned off; it downloads once, lazily, on the first test run. |
+| **React Testing Library** + **jsdom** | Tests web pages the way a user sees them (find the button called "Sign in", click it), in a simulated browser.                                                                                                                          |
+| _Planned:_ Playwright                 | Clicking through the real app in a real browser, automatically (Phase 6).                                                                                                                                                               |
 
 ### Code quality
 
@@ -399,7 +452,7 @@ The full suite has about 240 tests.
 
 ---
 
-## 9. Decisions we wrote down (ADRs)
+## 10. Decisions we wrote down (ADRs)
 
 An **ADR** (Architecture Decision Record) is a short document that records an important choice: the problem, the decision, the alternatives, and the trade-offs. It answers "why did we do it this way?" long after everyone has forgotten.
 
@@ -412,10 +465,12 @@ An **ADR** (Architecture Decision Record) is a short document that records an im
 | 005 | Board members inside the board      | Each board stores its members and their roles itself; people who aren't members get "not found".                                       |
 | 006 | No multi-step database transactions | Writes that touch several collections are ordered so a crash midway leaves nothing anyone can see or reach.                            |
 | 007 | Unique positions with retry         | The database refuses two items in the same spot; the server retries at a random free spot nearby.                                      |
+| 008 | Pin React Router 7                  | Version 8 needs React 19; we stay on 7 until React and React Router are upgraded together.                                             |
+| 009 | Optimistic card moves               | A dropped card moves on screen at once; the server's copy replaces it, and a refusal puts it back and reloads the board.               |
 
 ---
 
-## 10. Glossary
+## 11. Glossary
 
 | Term                    | Meaning                                                                                                                                            |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
