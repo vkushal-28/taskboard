@@ -1,11 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
+import { useToastStore } from '../lib/toast-store';
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  useToastStore.setState({ toasts: [] });
 });
 
 // jsdom has no <dialog> methods. These mimic the browser: `open` toggles and close() fires the

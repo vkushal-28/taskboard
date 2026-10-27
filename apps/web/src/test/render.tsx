@@ -6,7 +6,7 @@ import { routes } from '../app/routes';
 import { queryClient } from '../lib/query-client';
 import { json, urlOf } from './http';
 
-export type FakeRoute = (init: RequestInit | undefined) => Response;
+export type FakeRoute = (init: RequestInit | undefined) => Response | Promise<Response>;
 
 // Stubs fetch with one handler per "METHOD /path". Unknown requests fail the test loudly.
 export function stubApi(handlers: Record<string, FakeRoute>) {

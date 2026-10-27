@@ -80,6 +80,9 @@ export const cardDtoSchema = z.object({
   archived: z.boolean(),
 });
 
+export const listResponseSchema = z.object({ list: listDtoSchema });
+export const cardResponseSchema = z.object({ card: cardDtoSchema });
+
 export const boardDetailSchema = z.object({
   board: z.object({
     id: z.string(),

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
   ['month', 30 * 24 * 3600],
@@ -23,4 +25,13 @@ export function greetingFor(date: Date): string {
   if (hour < 12) return 'Good morning';
   if (hour < 18) return 'Good afternoon';
   return 'Good evening';
+}
+
+/**
+ * The time when the component mounted. Render must be pure, so components read the clock once
+ * through a lazy initializer instead of calling Date.now() on every render.
+ */
+export function useNow(): number {
+  const [now] = useState(() => Date.now());
+  return now;
 }
