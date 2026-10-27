@@ -36,6 +36,20 @@ export function findListOf(columns: Columns, cardId: string): string | undefined
 }
 
 /**
+ * A list's order after a drop. Dropping onto a card takes that card's slot; dropping onto the
+ * list itself (its header, the space below the cards, an empty list) puts the card last.
+ */
+export function dropOrder(ids: string[], cardId: string, overId: string, overIsList: boolean) {
+  if (!ids.includes(cardId)) return ids;
+  const others = ids.filter((id) => id !== cardId);
+  if (overIsList) return [...others, cardId];
+  const to = ids.indexOf(overId);
+  if (to === -1) return ids;
+  others.splice(to, 0, cardId);
+  return others;
+}
+
+/**
  * Where a card lands when dropped at `index` of `listId`. Returns null when the drop leaves the
  * card where it already was, so no request is sent.
  */
