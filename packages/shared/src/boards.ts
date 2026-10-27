@@ -51,6 +51,8 @@ export const boardSummarySchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+export const boardListResponseSchema = z.object({ boards: z.array(boardSummarySchema) });
+
 export const boardMemberDtoSchema = z.object({
   id: z.string(),
   name: z.string(),

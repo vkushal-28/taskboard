@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router';
 import { RegisterPage } from '../features/auth/RegisterPage';
 import { ProtectedRoute, PublicOnlyRoute } from '../features/auth/route-guards';
 import { SignInPage } from '../features/auth/SignInPage';
+import { BoardPage } from '../features/boards/BoardPage';
 import { MyBoardsPage } from '../features/boards/MyBoardsPage';
 import { NotFoundPage } from './NotFoundPage';
 
@@ -16,7 +17,10 @@ export const routes: RouteObject[] = [
   },
   {
     element: <ProtectedRoute />,
-    children: [{ path: '/', element: <MyBoardsPage /> }],
+    children: [
+      { path: '/', element: <MyBoardsPage /> },
+      { path: '/b/:boardId', element: <BoardPage /> },
+    ],
   },
   { path: '*', element: <NotFoundPage /> },
 ];

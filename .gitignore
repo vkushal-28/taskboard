@@ -6,3 +6,6 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+
+# Playwright MCP browser snapshots and logs
+.playwright-mcp/

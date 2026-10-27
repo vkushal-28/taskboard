@@ -4,7 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { vi } from 'vitest';
 import { routes } from '../app/routes';
 import { queryClient } from '../lib/query-client';
-import { urlOf } from './http';
+import { json, urlOf } from './http';
 
 export type FakeRoute = (init: RequestInit | undefined) => Response;
 
@@ -32,3 +32,9 @@ export function renderApp(initialPath: string) {
   );
   return { router };
 }
+
+// What the home page loads besides /auth/me. Spread into stubApi() for tests that land there.
+export const emptyHomeHandlers: Record<string, FakeRoute> = {
+  'GET /boards': () => json(200, { boards: [] }),
+  'GET /activity/recent': () => json(200, { activity: [] }),
+};

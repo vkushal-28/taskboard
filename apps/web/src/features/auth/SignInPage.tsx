@@ -2,10 +2,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, type LoginInput } from '@taskboard/shared';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router';
+import { FormError } from '../../components/FormError';
 import { TextField } from '../../components/TextField';
+import { describeError } from '../../lib/api-error';
 import { useLogin } from './api';
 import { AuthLayout } from './AuthLayout';
-import { describeAuthError, Divider, FormError, GitHubButton, SubmitButton } from './form-parts';
+import { Divider, GitHubButton, SubmitButton } from './form-parts';
 
 // Created by the Phase 7 seed script. Keep the two in sync.
 export const DEMO_CREDENTIALS: LoginInput = { email: 'priya@acme.dev', password: 'demo1234!' };
@@ -45,7 +47,7 @@ export function SignInPage() {
         // handleSubmit returns a promise; React ignores it, so mark it as deliberately unawaited.
         onSubmit={(event) => void handleSubmit((input) => login.mutate(input))(event)}
       >
-        {login.isError && <FormError>{describeAuthError(login.error)}</FormError>}
+        {login.isError && <FormError>{describeError(login.error)}</FormError>}
         <TextField
           label="Email"
           type="email"

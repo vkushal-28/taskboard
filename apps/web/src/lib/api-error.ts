@@ -35,3 +35,10 @@ export async function toApiError(response: Response): Promise<ApiError> {
   }
   return new ApiError(response.status, 'UNKNOWN', `Request failed with status ${response.status}`);
 }
+
+/** A sentence for the user. 4xx messages come from the api and are written for people. */
+export function describeError(error: unknown): string {
+  if (isApiError(error, 429)) return 'Too many attempts. Wait a few minutes and try again.';
+  if (isApiError(error) && error.status < 500) return error.message;
+  return 'Something went wrong. Check your connection and try again.';
+}

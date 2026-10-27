@@ -2,11 +2,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { registerSchema, type RegisterInput } from '@taskboard/shared';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router';
+import { FormError } from '../../components/FormError';
 import { TextField } from '../../components/TextField';
-import { isApiError } from '../../lib/api-error';
+import { describeError, isApiError } from '../../lib/api-error';
 import { useRegister } from './api';
 import { AuthLayout } from './AuthLayout';
-import { describeAuthError, Divider, FormError, GitHubButton, SubmitButton } from './form-parts';
+import { Divider, GitHubButton, SubmitButton } from './form-parts';
 
 export function RegisterPage() {
   const registerUser = useRegister();
@@ -47,7 +48,7 @@ export function RegisterPage() {
       <Divider />
 
       <form noValidate className="space-y-4" onSubmit={(event) => void handleSubmit(submit)(event)}>
-        {bannerError && <FormError>{describeAuthError(registerUser.error)}</FormError>}
+        {bannerError && <FormError>{describeError(registerUser.error)}</FormError>}
         <TextField
           label="Name"
           autoComplete="name"

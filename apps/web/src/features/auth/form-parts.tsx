@@ -1,13 +1,4 @@
 import type { ReactNode } from 'react';
-import { isApiError } from '../../lib/api-error';
-
-export function FormError({ children }: { children: ReactNode }) {
-  return (
-    <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-      {children}
-    </div>
-  );
-}
 
 export function SubmitButton({ pending, children }: { pending: boolean; children: ReactNode }) {
   return (
@@ -46,10 +37,4 @@ export function Divider() {
       <span className="h-px flex-1 bg-slate-200" />
     </div>
   );
-}
-
-export function describeAuthError(error: unknown): string {
-  if (isApiError(error, 429)) return 'Too many attempts. Wait a few minutes and try again.';
-  if (isApiError(error) && error.status < 500) return error.message;
-  return 'Something went wrong. Check your connection and try again.';
 }
