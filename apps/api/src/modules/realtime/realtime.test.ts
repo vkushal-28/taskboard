@@ -476,3 +476,48 @@ describe('card drag cues', () => {
     expect(cardDraggingSchema.parse(await ended)).toMatchObject({ userId: member.id });
   });
 });
+
+describe('socket message limit', () => {
+  it('drops messages over the per-socket limit', async () => {
+    // A separate server with a tiny limit and a long window, so the count is exact.
+    const limitedHttp = createServer(app);
+    const limited = createRealtimeServer(limitedHttp, {
+      messageLimit: { max: 5, windowMs: 60_000 },
+    });
+    await new Promise<void>((resolve) => limitedHttp.listen(0, resolve));
+    const limitedUrl = `http://localhost:${(limitedHttp.address() as AddressInfo).port}`;
+    const connectTo = async (user: Parameters<typeof accessCookieFor>[0]) => {
+      const socket: ClientSocket = connect(limitedUrl, {
+        transports: ['websocket'],
+        reconnection: false,
+        extraHeaders: { cookie: await accessCookieFor(user), origin: CLIENT_ORIGIN },
+      });
+      openSockets.push(socket);
+      expect(await connectResult(socket)).toEqual({ connected: true });
+      return socket;
+    };
+
+    try {
+      const { board, owner, member } = await createBoardWithRoles();
+      const list = await createList(board._id);
+      const card = await createCard(list);
+      const watcher = await connectTo(owner);
+      await join(watcher, { boardId: board.id });
+      const dragger = await connectTo(member);
+      await join(dragger, { boardId: board.id });
+      let cues = 0;
+      watcher.onAny((name: string) => {
+        if (name === CARD_DRAGGING) cues += 1;
+      });
+
+      // The join used 1 of the dragger's 5 messages, so 4 of these 10 get through.
+      for (let i = 0; i < 10; i += 1) {
+        dragger.emit(CARD_DRAG, { boardId: board.id, cardId: card.id });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(cues).toBe(4);
+    } finally {
+      await limited.close();
+    }
+  });
+});
