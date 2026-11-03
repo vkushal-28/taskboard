@@ -164,4 +164,33 @@ describe('createApiClient', () => {
 
     expect(pathsCalled(fetchMock).filter((path) => path === '/auth/refresh')).toHaveLength(2);
   });
+
+  describe('recoverSession', () => {
+    it('refreshes and reports success', async () => {
+      const fetchMock = fakeFetch({ '/auth/refresh': [() => noContent()] });
+      const onSessionExpired = vi.fn();
+      const api = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock, onSessionExpired });
+
+      await expect(api.recoverSession()).resolves.toBe(true);
+      expect(onSessionExpired).not.toHaveBeenCalled();
+    });
+
+    it('ends the session when the refresh is refused', async () => {
+      const fetchMock = fakeFetch({ '/auth/refresh': [() => errorResponse(401, 'UNAUTHORIZED')] });
+      const onSessionExpired = vi.fn();
+      const api = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock, onSessionExpired });
+
+      await expect(api.recoverSession()).resolves.toBe(false);
+      expect(onSessionExpired).toHaveBeenCalledOnce();
+    });
+
+    it('keeps the session on a network error', async () => {
+      const fetchMock = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
+      const onSessionExpired = vi.fn();
+      const api = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock, onSessionExpired });
+
+      await expect(api.recoverSession()).resolves.toBe(false);
+      expect(onSessionExpired).not.toHaveBeenCalled();
+    });
+  });
 });

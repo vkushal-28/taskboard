@@ -18,6 +18,11 @@ export interface ApiClientOptions {
 export interface ApiClient {
   request<T>(path: string, options: RequestOptions & { schema: z.ZodType<T> }): Promise<T>;
   request(path: string, options?: RequestOptions): Promise<void>;
+  /**
+   * For callers outside `request` (the socket handshake): refreshes the session, sharing any
+   * refresh already running. On failure it ends the session, like a REST 401 does.
+   */
+  recoverSession(): Promise<boolean>;
 }
 
 const REFRESH_PATH = '/auth/refresh';
@@ -77,5 +82,12 @@ export function createApiClient({
     return options.schema.parse(await response.json());
   }
 
-  return { request };
+  async function recoverSession(): Promise<boolean> {
+    // A network error is not an expired session: report failure but keep the user signed in.
+    const refreshed = await refreshSession().catch(() => null);
+    if (refreshed === false) onSessionExpired?.();
+    return refreshed === true;
+  }
+
+  return { request, recoverSession };
 }

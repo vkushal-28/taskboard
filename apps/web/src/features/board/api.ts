@@ -10,13 +10,11 @@ import { api } from '../../lib/api';
 import { isApiError } from '../../lib/api-error';
 import { showToast } from '../../lib/toast-store';
 import { boardKeys } from '../boards/api';
+import { appendIfMissing } from './live-events';
 import { applyMove, replaceCard, type MovePlan } from './ordering';
 
-// Idempotent, so an item that already arrived (Phase 4: a socket event, or a refetch after a
-// reconnect) is not added twice.
-function appendIfMissing<T extends { id: string }>(items: T[], item: T): T[] {
-  return items.some((existing) => existing.id === item.id) ? items : [...items, item];
-}
+/** Lets the socket hook find card moves that are still in flight on a board. */
+export const moveCardKey = (boardId: string) => ['board', boardId, 'move-card'] as const;
 
 export const MOVE_FAILED_MESSAGE = 'Could not move the card, so it went back to where it was.';
 
@@ -61,6 +59,7 @@ export function useMoveCard(boardId: string) {
   const queryKey = boardKeys.detail(boardId);
 
   return useMutation({
+    mutationKey: moveCardKey(boardId),
     mutationFn: ({ cardId, listId, beforeId, afterId }: MovePlan) =>
       api.request(`/cards/${cardId}/move`, {
         method: 'PATCH',
