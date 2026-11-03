@@ -17,10 +17,11 @@ _Last updated: 2026-10-24 (Phases 0, 1 and 2 done)._
 5. [Phase 1 — Authentication (done)](#5-phase-1--authentication-done)
 6. [Phase 2 — Boards, lists and cards API (done)](#6-phase-2--boards-lists-and-cards-api-done)
 7. [Phase 3 — The web app: sign in, My boards, the board (done)](#7-phase-3--the-web-app-sign-in-my-boards-the-board-done)
-8. [Phases still to come](#8-phases-still-to-come)
-9. [Every tool and package, and why](#9-every-tool-and-package-and-why)
-10. [Decisions we wrote down (ADRs)](#10-decisions-we-wrote-down-adrs)
-11. [Glossary](#11-glossary)
+8. [Phase 4 — Live updates and presence (done)](#8-phase-4--live-updates-and-presence-done)
+9. [Phases still to come](#9-phases-still-to-come)
+10. [Every tool and package, and why](#10-every-tool-and-package-and-why)
+11. [Decisions we wrote down (ADRs)](#11-decisions-we-wrote-down-adrs)
+12. [Glossary](#12-glossary)
 
 ---
 
@@ -80,7 +81,7 @@ Every commit follows **Conventional Commits**: `type(scope): what changed`, for 
                 ┌──────────────────────────┐
   Browser  ───▶ │  web  (React app)        │   what the user sees
                 └────────────┬─────────────┘
-                             │  HTTP requests (+ live socket later)
+                             │  HTTP requests + a live socket
                 ┌────────────▼─────────────┐
                 │  api  (Node + Express)   │   rules, security, logic
                 └────────────┬─────────────┘
@@ -371,18 +372,59 @@ The full suite has about 340 tests.
 
 ---
 
-## 8. Phases still to come
+## 8. Phase 4 — Live updates and presence (done)
+
+**Goal:** two people on the same board see each other's changes as they happen, and can see who else is there.
+
+**How it works in one paragraph:** besides normal HTTP requests, each open board keeps one long-lived connection to the server, called a **WebSocket**, which we manage with **Socket.IO**. Changes still go through the normal api (REST). Only after the database has saved a change does the server tell everyone who has that board open. The socket is read-only: nothing sent over it ever changes the database.
+
+### Slice 4.1 — The socket server (done)
+
+- **Who may connect:** the socket uses the same login cookie as the api. If it's missing or expired, the connection is refused, and the web app refreshes the login and tries again (ADR 010).
+- **A trap that CORS doesn't cover:** browsers don't apply the usual cross-site rules to WebSockets, and they still send our cookie. Without a check, any website could open a socket as you and read your boards' updates. So the server only accepts connections from our own web app's address.
+- **Rooms:** each board has a "room". Opening a board asks to join it, and the server first checks that you're a member. Non-members get "not found", the same as with the api (ADR 005).
+- **Announcing changes:** every change (cards and lists created, renamed, moved or deleted, and boards renamed or deleted) is announced to the board's room right after it's saved.
+
+### Slice 4.2 — Keeping the screen in sync (done)
+
+- The board page listens to its room and applies each change to the data on screen, with no reload.
+- **Your own changes come back to you too.** We first planned to ignore them, since your screen already shows them. But then a second tab of yours, or your phone, would never update. Instead, every update is written so that applying it twice changes nothing (ADR 011).
+- **A card you're moving right now** is protected: a change to it from someone else waits until your move is finished, then the board is reloaded so both changes are counted.
+- **After a lost connection** (laptop asleep, Wi-Fi drop), the board is reloaded once the socket reconnects, because updates sent while you were away are gone.
+- **If the board is deleted** while you're looking at it, you're told and taken back to My boards.
+
+### Slice 4.3 — Who's online and who's moving what (done)
+
+- The board header shows the avatars of people who have the board open, and "2 online". Two tabs of yours count as one person.
+- When someone picks up a card, everyone else sees "Alex is moving this" on it until they drop it. Only the start and the end of a drag are sent, not every mouse movement, and none of it is saved.
+- When someone else moves a card to another list, you get a short message: "Alex moved 'Homepage' to Done".
+- Closing a tab updates everyone at once, even in the middle of a drag, so nobody is left looking at a "ghost" (Phase 4's main check).
+- "Who's online" isn't stored anywhere; it's read from the board's room each time. There's nothing to keep in sync, and it will still work if we ever run several servers (ADR 012).
+
+### Demo accounts
+
+The "demo login" hint on the sign-in page pointed to an account that didn't exist yet. `pnpm seed` now creates two demo users (both with the password `demo1234!`) and a "Website Redesign" board:
+
+- **Priya**, `priya@acme.dev`, the owner
+- **Alex**, `alex@acme.dev`, a member
+
+Running it again doesn't make duplicates.
+
+**How we tested it:** besides about 410 automated tests, we signed in as Priya and Alex in two separate browser windows. We dragged cards, added cards, went offline and came back, and closed a tab mid-drag, and checked the other window each time.
+
+---
+
+## 9. Phases still to come
 
 | Phase                                   | What it adds                                                                                                                     |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **4 — Real-time sync and presence**     | Socket.IO: changes appear live for everyone on the board, plus "who's online" avatars.                                           |
 | **5 — Card details, comments, invites** | Card detail popup, comments, activity history, and inviting people by email with a role.                                         |
 | **6 — Testing and CI hardening**        | Frontend tests, an end-to-end browser test (Playwright), coverage reports, dependency security checks.                           |
 | **7 — Deploy and polish**               | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states. |
 
 ---
 
-## 9. Every tool and package, and why
+## 10. Every tool and package, and why
 
 ### Languages and runtime
 
@@ -394,20 +436,21 @@ The full suite has about 340 tests.
 
 ### Backend (`apps/api`)
 
-| Package                 | Why                                                                                                                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Express 5**           | The most widely known Node web framework. Version 5 automatically catches errors from `async` code.                                                                                  |
-| **Mongoose**            | Defines the shape of MongoDB data and talks to the database.                                                                                                                         |
-| **Zod**                 | Validates input (request bodies, settings) and generates TypeScript types from the same rules.                                                                                       |
-| **Pino**                | Very fast structured logging, with automatic redaction of secrets. `pino-pretty` makes logs readable during development.                                                             |
-| **jose**                | Creates and verifies JWT access tokens. Modern, typed, no dependencies. Chosen over `jsonwebtoken`, which is older-style and needs separate type files.                              |
-| **bcryptjs**            | Hashes passwords so they're never stored in plain text. Pure JavaScript, so no native compilation step. Chosen over `bcrypt`, which needs a compiler and an approved install script. |
-| **cookie-parser**       | Reads cookies from incoming requests.                                                                                                                                                |
-| **helmet**              | Adds security-related HTTP headers with one line.                                                                                                                                    |
-| **cors**                | Allows only our web app's address to call the api with cookies.                                                                                                                      |
-| **express-rate-limit**  | Limits how often one IP address can try to log in.                                                                                                                                   |
-| **tsx**                 | Runs TypeScript directly in development and restarts on file changes.                                                                                                                |
-| **fractional-indexing** | Creates sortable position strings, so a card can move between two others by changing only itself. Tiny, with no dependencies of its own.                                             |
+| Package                 | Why                                                                                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Express 5**           | The most widely known Node web framework. Version 5 automatically catches errors from `async` code.                                                                                   |
+| **Mongoose**            | Defines the shape of MongoDB data and talks to the database.                                                                                                                          |
+| **Zod**                 | Validates input (request bodies, settings) and generates TypeScript types from the same rules.                                                                                        |
+| **Pino**                | Very fast structured logging, with automatic redaction of secrets. `pino-pretty` makes logs readable during development.                                                              |
+| **jose**                | Creates and verifies JWT access tokens. Modern, typed, no dependencies. Chosen over `jsonwebtoken`, which is older-style and needs separate type files.                               |
+| **bcryptjs**            | Hashes passwords so they're never stored in plain text. Pure JavaScript, so no native compilation step. Chosen over `bcrypt`, which needs a compiler and an approved install script.  |
+| **cookie-parser**       | Reads cookies from incoming requests.                                                                                                                                                 |
+| **helmet**              | Adds security-related HTTP headers with one line.                                                                                                                                     |
+| **cors**                | Allows only our web app's address to call the api with cookies.                                                                                                                       |
+| **express-rate-limit**  | Limits how often one IP address can try to log in.                                                                                                                                    |
+| **tsx**                 | Runs TypeScript directly in development and restarts on file changes.                                                                                                                 |
+| **fractional-indexing** | Creates sortable position strings, so a card can move between two others by changing only itself. Tiny, with no dependencies of its own.                                              |
+| **socket.io**           | Live connections to the browser: rooms per board, automatic reconnects, and acknowledgements ("did the join work?"). The api's tests also use `socket.io-client` to connect for real. |
 
 ### Frontend (`apps/web`)
 
@@ -418,10 +461,11 @@ The full suite has about 340 tests.
 | **Tailwind CSS**                              | Style elements with small utility classes directly in the markup; consistent spacing and colours.                 |
 | **React Router 7**                            | Chooses the page for each address and guards the signed-in pages. Pinned to 7 because 8 needs React 19 (ADR 008). |
 | **TanStack Query**                            | Caches the api's answers and shares them across the app; powers the instant card moves (ADR 001, ADR 009).        |
-| **Zustand**                                   | Holds the small bits of pure UI state, currently the pop-up messages ("toasts").                                  |
+| **Zustand**                                   | Holds the small bits of pure UI state: pop-up messages ("toasts"), who's online and who's dragging which card.    |
 | **React Hook Form** + **@hookform/resolvers** | Forms that check input with the same Zod rules the server uses.                                                   |
 | **dnd-kit** (`core`, `sortable`, `utilities`) | Drag and drop with mouse, touch and keyboard.                                                                     |
 | **fractional-indexing**                       | The same position strings as the api, so a dropped card gets a temporary spot before the server answers.          |
+| **socket.io-client**                          | The browser side of the live connection. Same version as the server.                                              |
 
 ### Testing
 
@@ -452,7 +496,7 @@ The full suite has about 340 tests.
 
 ---
 
-## 10. Decisions we wrote down (ADRs)
+## 11. Decisions we wrote down (ADRs)
 
 An **ADR** (Architecture Decision Record) is a short document that records an important choice: the problem, the decision, the alternatives, and the trade-offs. It answers "why did we do it this way?" long after everyone has forgotten.
 
@@ -467,10 +511,13 @@ An **ADR** (Architecture Decision Record) is a short document that records an im
 | 007 | Unique positions with retry         | The database refuses two items in the same spot; the server retries at a random free spot nearby.                                      |
 | 008 | Pin React Router 7                  | Version 8 needs React 19; we stay on 7 until React and React Router are upgraded together.                                             |
 | 009 | Optimistic card moves               | A dropped card moves on screen at once; the server's copy replaces it, and a refusal puts it back and reloads the board.               |
+| 010 | Socket login and origin check       | Sockets use the same login cookie as the api, and only our own web app may open one, which blocks cross-site socket hijacking.         |
+| 011 | Apply your own live updates         | Every update is applied, even your own, and applying one twice changes nothing, so your other tabs stay in sync.                       |
+| 012 | Presence from the board's room      | "Who's online" is read from the sockets in the board's room, one entry per person; nothing extra is stored.                            |
 
 ---
 
-## 11. Glossary
+## 12. Glossary
 
 | Term                    | Meaning                                                                                                                                            |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -497,3 +544,7 @@ An **ADR** (Architecture Decision Record) is a short document that records an im
 | **Database index**      | A sorted lookup table the database keeps so it can find matching records without reading every one.                                                |
 | **Race condition**      | Two things happening at the same moment and getting in each other's way, such as two people dropping a card in the same spot.                      |
 | **Optimistic update**   | Showing a change on screen immediately, before the server confirms it, and undoing it if the server says no.                                       |
+| **WebSocket**           | A connection between browser and server that stays open, so the server can send updates without being asked.                                       |
+| **Room**                | A Socket.IO group of connections. Each board has one; a message to the room reaches everyone who has that board open.                              |
+| **Presence**            | Knowing who is online right now, such as the avatars in the board header.                                                                          |
+| **Idempotent**          | Safe to do twice: doing it again gives the same result as doing it once.                                                                           |
