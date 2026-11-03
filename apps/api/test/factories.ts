@@ -85,7 +85,12 @@ export async function createList(boardId: Types.ObjectId, position?: string) {
 /** Positions default to after the last card in the list, archived ones included. */
 export async function createCard(
   list: { _id: Types.ObjectId; boardId: Types.ObjectId },
-  overrides: { position?: string; archived?: boolean; title?: string } = {},
+  overrides: {
+    position?: string;
+    archived?: boolean;
+    title?: string;
+    checklist?: { text: string; done?: boolean }[];
+  } = {},
 ) {
   const last = await CardModel.findOne({ listId: list._id }).sort({ position: -1 }).lean();
   return CardModel.create({
@@ -93,6 +98,7 @@ export async function createCard(
     listId: list._id,
     title: overrides.title ?? 'Test Card',
     archived: overrides.archived ?? false,
+    checklist: overrides.checklist ?? [],
     position: overrides.position ?? positionBetween(last?.position ?? null, null),
   });
 }

@@ -8,26 +8,31 @@ Every board-scoped route needs a signed-in user first:
 - **Not a member of the board** (or the board, list or card does not exist): 404 `NOT_FOUND`, so board ids do not leak (ADR 005)
 - **Member below the route's min role:** 403 `FORBIDDEN`
 
-| Endpoint                      | Min role  | owner | member | viewer |
-| ----------------------------- | --------- | ----- | ------ | ------ |
-| `GET /boards`                 | signed in | ✓     | ✓      | ✓      |
-| `POST /boards`                | signed in | ✓     | ✓      | ✓      |
-| `GET /boards/:boardId`        | viewer    | ✓     | ✓      | ✓      |
-| `PATCH /boards/:boardId`      | owner     | ✓     | 403    | 403    |
-| `DELETE /boards/:boardId`     | owner     | ✓     | 403    | 403    |
-| `POST /boards/:boardId/lists` | member    | ✓     | ✓      | 403    |
-| `PATCH /lists/:listId`        | member    | ✓     | ✓      | 403    |
-| `PATCH /lists/:listId/move`   | member    | ✓     | ✓      | 403    |
-| `DELETE /lists/:listId`       | member    | ✓     | ✓      | 403    |
-| `POST /lists/:listId/cards`   | member    | ✓     | ✓      | 403    |
-| `GET /cards/:cardId`          | viewer    | ✓     | ✓      | ✓      |
-| `PATCH /cards/:cardId`        | member    | ✓     | ✓      | 403    |
-| `PATCH /cards/:cardId/move`   | member    | ✓     | ✓      | 403    |
-| `DELETE /cards/:cardId`       | member    | ✓     | ✓      | 403    |
+| Endpoint                                  | Min role  | owner | member | viewer |
+| ----------------------------------------- | --------- | ----- | ------ | ------ |
+| `GET /boards`                             | signed in | ✓     | ✓      | ✓      |
+| `POST /boards`                            | signed in | ✓     | ✓      | ✓      |
+| `GET /boards/:boardId`                    | viewer    | ✓     | ✓      | ✓      |
+| `PATCH /boards/:boardId`                  | owner     | ✓     | 403    | 403    |
+| `DELETE /boards/:boardId`                 | owner     | ✓     | 403    | 403    |
+| `POST /boards/:boardId/lists`             | member    | ✓     | ✓      | 403    |
+| `PATCH /lists/:listId`                    | member    | ✓     | ✓      | 403    |
+| `PATCH /lists/:listId/move`               | member    | ✓     | ✓      | 403    |
+| `DELETE /lists/:listId`                   | member    | ✓     | ✓      | 403    |
+| `POST /lists/:listId/cards`               | member    | ✓     | ✓      | 403    |
+| `GET /cards/:cardId`                      | viewer    | ✓     | ✓      | ✓      |
+| `PATCH /cards/:cardId`                    | member    | ✓     | ✓      | 403    |
+| `PATCH /cards/:cardId/move`               | member    | ✓     | ✓      | 403    |
+| `DELETE /cards/:cardId`                   | member    | ✓     | ✓      | 403    |
+| `POST /cards/:cardId/checklist`           | member    | ✓     | ✓      | 403    |
+| `PATCH /cards/:cardId/checklist/:itemId`  | member    | ✓     | ✓      | 403    |
+| `DELETE /cards/:cardId/checklist/:itemId` | member    | ✓     | ✓      | 403    |
 
 `GET /boards` and `POST /boards` are not board-scoped: they only need `requireAuth`. `GET /boards` returns only boards the user is a member of.
 
 Archiving and restoring a card is `PATCH /cards/:cardId` with `{ archived }`, so it needs member like any other card edit.
+
+Checklist items are written one at a time through the `checklist` routes, so two people ticking different items at once never overwrite each other (ADR 013). `PATCH /cards/:cardId` still accepts a whole `checklist`, but the web app doesn't use it. A malformed `itemId` gets 404, like a missing one. Every card write also increments the card's `version`, and clients keep the copy with the highest one.
 
 A move whose target `listId` is on another board is rejected by the cards service with 409 (Slice 2.3), not by the middleware, because the target is in the body, not the url.
 

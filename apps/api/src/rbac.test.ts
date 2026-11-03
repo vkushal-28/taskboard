@@ -105,6 +105,27 @@ const ENDPOINTS: Endpoint[] = [
     successStatus: 204,
     request: ({ card }) => ({ path: `/cards/${card.id}` }),
   },
+  {
+    route: 'POST /cards/:cardId/checklist',
+    minRole: 'member',
+    successStatus: 201,
+    request: ({ card }) => ({ path: `/cards/${card.id}/checklist`, body: { text: 'New' } }),
+  },
+  {
+    route: 'PATCH /cards/:cardId/checklist/:itemId',
+    minRole: 'member',
+    successStatus: 200,
+    request: ({ card, itemId }) => ({
+      path: `/cards/${card.id}/checklist/${itemId}`,
+      body: { done: true },
+    }),
+  },
+  {
+    route: 'DELETE /cards/:cardId/checklist/:itemId',
+    minRole: 'member',
+    successStatus: 200,
+    request: ({ card, itemId }) => ({ path: `/cards/${card.id}/checklist/${itemId}` }),
+  },
 ];
 
 /** Routes that only need a signed-in user, not a board role. */
@@ -120,8 +141,9 @@ async function createFixture() {
   const roles = await createBoardWithRoles();
   const list = await createList(roles.board._id);
   const otherList = await createList(roles.board._id);
-  const card = await createCard(list);
-  return { ...roles, list, otherList, card };
+  const card = await createCard(list, { checklist: [{ text: 'First step' }] });
+  const itemId = card.checklist[0]?._id.toString() ?? '';
+  return { ...roles, list, otherList, card, itemId };
 }
 
 async function cookieFor(fixture: Fixture, actor: Actor): Promise<string | undefined> {

@@ -230,6 +230,10 @@ describe('board events', () => {
     },
     { event: 'card:deleted', send: (f) => f.as('member').delete(`/cards/${f.card.id}`) },
     {
+      event: 'card:updated',
+      send: (f) => f.as('member').post(`/cards/${f.card.id}/checklist`).send({ text: 'Live step' }),
+    },
+    {
       event: 'board:updated',
       send: (f) => f.as('owner').patch(`/boards/${f.board.id}`).send({ title: 'Renamed' }),
     },

@@ -24,6 +24,8 @@ export interface Card {
   dueDate: Date | null;
   checklist: ChecklistItem[];
   archived: boolean;
+  /** +1 on every write, inside the write's own update (ADR 013). */
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,6 +56,7 @@ const cardSchema = new Schema<Card>(
     dueDate: { type: Date, default: null },
     checklist: { type: [checklistItemSchema], default: [] },
     archived: { type: Boolean, default: false },
+    version: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
@@ -65,7 +68,10 @@ cardSchema.index({ boardId: 1, listId: 1, position: 1 }, { unique: true });
 export const CardModel = model<Card>('Card', cardSchema);
 
 export function toCardDto(
-  card: Omit<Card, 'createdAt' | 'updatedAt'> & { _id: Types.ObjectId },
+  card: Omit<Card, 'createdAt' | 'updatedAt' | 'version'> & {
+    _id: Types.ObjectId;
+    version?: number;
+  },
 ): CardDto {
   return {
     id: card._id.toString(),
@@ -83,5 +89,7 @@ export function toCardDto(
       done: item.done,
     })),
     archived: card.archived,
+    // Cards saved before versions existed have no field; they start at 0.
+    version: card.version ?? 0,
   };
 }

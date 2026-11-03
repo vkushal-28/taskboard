@@ -25,6 +25,7 @@ export function card(
     dueDate: null,
     checklist: [],
     archived: false,
+    version: 0,
     ...overrides,
   } satisfies CardDto;
 }

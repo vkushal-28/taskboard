@@ -78,6 +78,12 @@ export const cardDtoSchema = z.object({
   dueDate: z.iso.datetime().nullable(),
   checklist: z.array(z.object({ id: z.string(), text: z.string(), done: z.boolean() })),
   archived: z.boolean(),
+  /**
+   * Goes up by one with every write to the card, in the same atomic update. A client keeps the
+   * copy with the highest version, so a response or event that arrives late can't roll the
+   * card back (ADR 013).
+   */
+  version: z.number().int().nonnegative(),
 });
 
 export const listResponseSchema = z.object({ list: listDtoSchema });
