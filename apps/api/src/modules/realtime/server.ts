@@ -20,6 +20,7 @@ import { findMemberRole } from '../boards/access.js';
 import { ACCESS_COOKIE, readCookie } from '../auth/cookies.js';
 import { verifyAccessToken } from '../auth/tokens.js';
 import { type RealtimeServer } from './emitter.js';
+import { createMessageLimiter, SOCKET_MESSAGE_LIMIT, type MessageLimit } from './rate-limit.js';
 
 type RealtimeSocket =
   RealtimeServer extends Server<infer C, infer S, infer I, infer D> ? Socket<C, S, I, D> : never;
@@ -31,7 +32,10 @@ const BOARD_ROOM_PREFIX = boardRoom('');
  * rooms of boards the user belongs to, and receive events that services emit after DB writes.
  * The only things sockets send are presence and drag cues, which are never saved.
  */
-export function createRealtimeServer(httpServer: HttpServer): RealtimeServer {
+export function createRealtimeServer(
+  httpServer: HttpServer,
+  { messageLimit = SOCKET_MESSAGE_LIMIT }: { messageLimit?: MessageLimit } = {},
+): RealtimeServer {
   const clientOrigin = new URL(env.CLIENT_URL).origin;
 
   const io: RealtimeServer = new Server(httpServer, {
@@ -81,6 +85,19 @@ export function createRealtimeServer(httpServer: HttpServer): RealtimeServer {
 
   io.on('connection', (socket) => {
     const { userId } = socket.data;
+
+    // Drops messages over the limit. A dropped join gets no ack, so the client's join times
+    // out and is retried on the next connect. Logged once per window, not per message.
+    const allowMessage = createMessageLimiter(messageLimit);
+    let warned = false;
+    socket.use((packet, next) => {
+      if (allowMessage()) {
+        warned = false;
+        return next();
+      }
+      if (!warned) logger.warn({ userId, event: packet[0] }, 'socket message rate limit hit');
+      warned = true;
+    });
 
     socket.on(BOARD_JOIN, async (payload: unknown, ack: unknown) => {
       if (typeof ack !== 'function') return;

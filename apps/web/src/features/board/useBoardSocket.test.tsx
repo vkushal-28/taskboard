@@ -1,6 +1,7 @@
 import { BOARD_JOIN, CARD_DRAGGING, PRESENCE_UPDATE, type BoardDetail } from '@taskboard/shared';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -123,6 +124,23 @@ describe('useBoardSocket', () => {
     expect(cached()).toEqual(boardDetail());
   });
 
+  it('ignores a join ack that arrives after the user left the board', async () => {
+    let ackFor: (value: unknown) => void = () => {};
+    const { fetches, unmount } = renderSocketHook();
+    await waitFor(() => expect(fetches.board).toBe(1));
+    await waitFor(() => expect(queryClient.isFetching({ queryKey: KEY })).toBe(0));
+    fakeSocket.ack = new Promise((resolve) => (ackFor = resolve));
+
+    act(() => fakeSocket.reconnect());
+    unmount();
+    ackFor({ ok: true, role: 'owner' });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Nothing observes the board any more, so a stray invalidation would not show as a fetch.
+    expect(queryClient.getQueryState(KEY)?.isInvalidated).toBe(false);
+    expect(fetches.board).toBe(1);
+  });
+
   it('joins again and refetches the board after a reconnect', async () => {
     const { fetches } = renderSocketHook();
     await waitFor(() => expect(fetches.board).toBe(1));
@@ -208,6 +226,20 @@ describe('useBoardSocket', () => {
       expect(refreshes).toBe(1);
     });
 
+    it('does not reconnect when the refresh finishes after the user left the board', async () => {
+      const refresh = deferred();
+      const { unmount } = renderSocketHook({ 'POST /auth/refresh': () => refresh.promise });
+      await waitFor(() => expect(fakeSocket.emitted).toHaveLength(1));
+
+      act(() => fakeSocket.refuse('UNAUTHORIZED'));
+      unmount();
+      refresh.resolve(json(200, { user: priya }));
+
+      // Give the refresh time to settle; the socket must stay closed.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(fakeSocket.connected).toBe(false);
+    });
+
     it('signs the user out when the refresh fails', async () => {
       renderSocketHook({ 'POST /auth/refresh': () => errorResponse(401, 'UNAUTHORIZED') });
       await waitFor(() => expect(fakeSocket.emitted).toHaveLength(1));
@@ -281,7 +313,40 @@ describe('presence and drag cues', () => {
     act(() => fakeSocket.disconnect());
 
     expect(useLiveStore.getState()).toMatchObject({ onlineUserIds: [], draggingByCard: {} });
-    expect(screen.queryByTestId('presence')).not.toBeInTheDocument();
+    // Back to the dimmed member list until the rejoin sends fresh presence.
+    expect(screen.getByTestId('presence')).toHaveTextContent('2 members');
+    expect(screen.queryByText(/is moving this/)).not.toBeInTheDocument();
+  });
+
+  it('lists the members, dimmed, until presence arrives', async () => {
+    await openBoard();
+
+    const presence = screen.getByTestId('presence');
+    expect(presence).toHaveTextContent('2 members');
+    expect(within(presence).getByTitle('Alex Kim')).toBeInTheDocument();
+  });
+
+  it('announces a drag on pick-up and its end on cancel', async () => {
+    const user = userEvent.setup();
+    await openBoard();
+    const tile = screen.getByTestId('card-c1');
+
+    // dnd-kit's keyboard sensor: Space picks the card up, Escape cancels.
+    tile.focus();
+    await user.keyboard(' ');
+    await waitFor(() =>
+      expect(fakeSocket.emitted).toContainEqual({
+        event: 'card:drag',
+        payload: { boardId: 'b1', cardId: 'c1' },
+      }),
+    );
+    await user.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(fakeSocket.emitted.at(-1)).toEqual({
+        event: 'card:drag',
+        payload: { boardId: 'b1', cardId: null },
+      }),
+    );
   });
 
   it("shows a toast for someone else's move to another list, but not for the user's own", async () => {
