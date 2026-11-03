@@ -1,12 +1,13 @@
 import type { Server } from 'node:http';
-import type { Express } from 'express';
 
-// Express 5 passes bind errors (e.g. EADDRINUSE) to the listen callback instead of throwing.
-export function listen(app: Express, port: number): Promise<Server> {
+// Takes a server rather than the Express app, so add-ons like Socket.IO can attach before it
+// accepts a connection. Bind errors (e.g. EADDRINUSE) arrive as an 'error' event, not a throw.
+export function listen(server: Server, port: number): Promise<Server> {
   return new Promise((resolve, reject) => {
-    const server = app.listen(port, (error?: Error) => {
-      if (error) reject(error);
-      else resolve(server);
+    server.once('error', reject);
+    server.listen(port, () => {
+      server.off('error', reject);
+      resolve(server);
     });
   });
 }

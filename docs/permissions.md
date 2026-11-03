@@ -32,3 +32,14 @@ Archiving and restoring a card is `PATCH /cards/:cardId` with `{ archived }`, so
 A move whose target `listId` is on another board is rejected by the cards service with 409 (Slice 2.3), not by the middleware, because the target is in the body, not the url.
 
 Phase 5 adds invites, member role changes and member removal (owner only) to this table.
+
+## Socket events (Phase 4)
+
+Sockets are read-only. Every write goes through REST and the routes above; the service broadcasts the result to the board room only after the DB write succeeds.
+
+- **Handshake:** needs a valid `tb_access` cookie, otherwise `connect_error` with `data.code = 'UNAUTHORIZED'`. A handshake whose `Origin` is not `CLIENT_URL` is refused (ADR 010).
+- **`board:join { boardId }`:** any role (viewer and up) joins the room `board:<id>`, and the reply is `{ ok: true, role }`. A non-member or a missing board gets `{ ok: false, error: { code: 'NOT_FOUND' } }`, the same rule as REST (ADR 005). A malformed id gets `VALIDATION_ERROR`.
+- **`board:leave { boardId }`:** leaves the room. No reply.
+- **Board events** (`card:*`, `list:*`, `board:updated`, `board:deleted`): sent to everyone in the room, including the actor's own sockets. Each payload carries `boardId` and `actorId`. Schemas are in `packages/shared/src/realtime.ts`.
+
+Membership is checked when a socket joins, not on every event. Phase 5 must remove a member's sockets from the room when they are removed from the board (ADR 010).

@@ -5,6 +5,7 @@ import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/pos
 import { logActivity } from '../activity/service.js';
 import { areBoardMembers } from '../boards/access.js';
 import { ListModel } from '../lists/model.js';
+import { emitToBoard } from '../realtime/emitter.js';
 import { CardModel, toCardDto } from './model.js';
 
 export async function createCard(
@@ -23,7 +24,9 @@ export async function createCard(
   );
 
   await logActivity({ boardId, actorId, cardId: card.id, type: 'card.created', meta: { listId } });
-  return toCardDto(card);
+  const dto = toCardDto(card);
+  emitToBoard(boardId, 'card:created', { boardId, actorId, card: dto });
+  return dto;
 }
 
 export async function getCard(boardId: string, cardId: string): Promise<CardDto> {
@@ -76,7 +79,10 @@ export async function updateCard(
     const type = card.archived ? 'card.archived' : 'card.restored';
     await logActivity({ boardId, actorId, cardId, type });
   }
-  return toCardDto(card);
+  // One event for any change, archiving included: the card carries `archived`.
+  const dto = toCardDto(card);
+  emitToBoard(boardId, 'card:updated', { boardId, actorId, card: dto });
+  return dto;
 }
 
 export async function moveCard(
@@ -128,7 +134,14 @@ export async function moveCard(
     type: 'card.moved',
     meta: { fromListId: card.listId.toString(), toListId: listId },
   });
-  return toCardDto(moved);
+  const dto = toCardDto(moved);
+  emitToBoard(boardId, 'card:moved', {
+    boardId,
+    actorId,
+    card: dto,
+    fromListId: card.listId.toString(),
+  });
+  return dto;
 }
 
 export async function deleteCard(boardId: string, cardId: string, actorId: string): Promise<void> {
@@ -141,6 +154,12 @@ export async function deleteCard(boardId: string, cardId: string, actorId: strin
     cardId,
     type: 'card.deleted',
     meta: { listId: card.listId.toString(), title: card.title },
+  });
+  emitToBoard(boardId, 'card:deleted', {
+    boardId,
+    actorId,
+    cardId,
+    listId: card.listId.toString(),
   });
 }
 
