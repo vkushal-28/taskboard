@@ -1,7 +1,13 @@
 import type { BoardEventName } from '@taskboard/shared';
 import { describe, expect, it } from 'vitest';
 import { boardDetail, card, list } from '../../test/board-fixtures';
-import { applyBoardEvent, cardIdOf, parseBoardEvent, type BoardEvent } from './live-events';
+import {
+  applyBoardEvent,
+  cardIdOf,
+  describeRemoteMove,
+  parseBoardEvent,
+  type BoardEvent,
+} from './live-events';
 import { groupCards } from './ordering';
 
 const base = { boardId: 'b1', actorId: 'u2' };
@@ -104,5 +110,30 @@ describe('cardIdOf', () => {
     );
     expect(cardIdOf(event('card:deleted', { cardId: 'c2', listId: 'l1' }))).toBe('c2');
     expect(cardIdOf(event('list:deleted', { listId: 'l1' }))).toBeUndefined();
+  });
+});
+
+describe('describeRemoteMove', () => {
+  const moved = (listId: string, fromListId: string, actorId = 'u2') => ({
+    boardId: 'b1',
+    actorId,
+    card: card('c1', listId, 'a5', { title: 'Homepage' }),
+    fromListId,
+  });
+
+  it('names the mover, the card and the target list', () => {
+    expect(describeRemoteMove(boardDetail(), moved('l3', 'l1'))).toBe(
+      'Alex Kim moved "Homepage" to Done',
+    );
+  });
+
+  it('stays quiet for a reorder within one list', () => {
+    expect(describeRemoteMove(boardDetail(), moved('l1', 'l1'))).toBeNull();
+  });
+
+  it('falls back to "Someone" for a mover the board does not list', () => {
+    expect(describeRemoteMove(boardDetail(), moved('l3', 'l1', 'u9'))).toBe(
+      'Someone moved "Homepage" to Done',
+    );
   });
 });

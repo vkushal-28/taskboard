@@ -1,4 +1,14 @@
-import { BOARD_EVENTS, BOARD_JOIN, type BoardDetail, type BoardEventName } from '@taskboard/shared';
+import {
+  BOARD_EVENTS,
+  BOARD_JOIN,
+  CARD_DRAG,
+  CARD_DRAGGING,
+  cardDraggingSchema,
+  PRESENCE_UPDATE,
+  presenceUpdateSchema,
+  type BoardDetail,
+  type BoardEventName,
+} from '@taskboard/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
@@ -9,12 +19,25 @@ import { showToast } from '../../lib/toast-store';
 import { useAuth } from '../auth/api';
 import { boardKeys } from '../boards/api';
 import { moveCardKey } from './api';
-import { applyBoardEvent, cardIdOf, parseBoardEvent, type BoardEvent } from './live-events';
+import {
+  applyBoardEvent,
+  cardIdOf,
+  describeRemoteMove,
+  parseBoardEvent,
+  type BoardEvent,
+} from './live-events';
+import { applyDragging, applyPresence, resetLive, useLiveStore } from './live-store';
 
 export const BOARD_DELETED_MESSAGE = 'This board was deleted.';
 
 const joinedAckSchema = z.object({ ok: z.literal(true) });
 const connectErrorSchema = z.object({ data: z.object({ code: z.string() }) });
+
+/** Tells the others on the board that this user started (`cardId`) or stopped dragging. */
+export function sendCardDrag(boardId: string, cardId: string | null): void {
+  const socket = getRealtimeSocket();
+  if (socket.connected) socket.emit(CARD_DRAG, { boardId, cardId });
+}
 
 /**
  * Keeps the cached board in sync with other people's writes: joins the board's room, applies
@@ -90,6 +113,12 @@ export function useBoardSocket(boardId: string): void {
       if (event.payload.boardId !== boardId) return;
       if (event.name === 'board:deleted') return onBoardDeleted();
 
+      if (event.name === 'card:moved' && event.payload.actorId !== userIdRef.current) {
+        const detail = queryClient.getQueryData<BoardDetail>(queryKey);
+        const message = detail && describeRemoteMove(detail, event.payload);
+        if (message) showToast(message, 'info');
+      }
+
       const cardId = cardIdOf(event);
       if (cardId && isMoving(cardId)) {
         // Our own echo carries the same card the move's response will. Anyone else's change
@@ -105,6 +134,17 @@ export function useBoardSocket(boardId: string): void {
     const onConnect = () => {
       sessionRetried = false;
       void join();
+    };
+    // Presence and drag cues from before the drop are stale; the rejoin sends fresh ones.
+    const onDisconnect = () => resetLive(boardId);
+
+    const onPresence = (payload: unknown) => {
+      const parsed = presenceUpdateSchema.safeParse(payload);
+      if (parsed.success) useLiveStore.setState((state) => applyPresence(state, parsed.data));
+    };
+    const onDragging = (payload: unknown) => {
+      const parsed = cardDraggingSchema.safeParse(payload);
+      if (parsed.success) useLiveStore.setState((state) => applyDragging(state, parsed.data));
     };
 
     // The server refuses the handshake when the access token has expired. Refresh once, then
@@ -126,17 +166,25 @@ export function useBoardSocket(boardId: string): void {
       socket.on(name, listener);
       return { name, listener };
     });
-    socket.on('connect', onConnect);
-    socket.on('connect_error', onConnectError);
+    const signalListeners = [
+      { name: 'connect', listener: onConnect },
+      { name: 'connect_error', listener: onConnectError },
+      { name: 'disconnect', listener: onDisconnect },
+      { name: PRESENCE_UPDATE, listener: onPresence },
+      { name: CARD_DRAGGING, listener: onDragging },
+    ];
+    signalListeners.forEach(({ name, listener }) => socket.on(name, listener));
 
+    resetLive(boardId);
     if (socket.connected) void join();
     else socket.connect();
 
     return () => {
-      eventListeners.forEach(({ name, listener }) => socket.off(name, listener));
-      socket.off('connect', onConnect);
-      socket.off('connect_error', onConnectError);
+      [...eventListeners, ...signalListeners].forEach(({ name, listener }) =>
+        socket.off(name, listener),
+      );
       stopWaiting?.();
+      resetLive(null);
       // Disconnecting leaves every room. The next board page connects again.
       socket.disconnect();
     };

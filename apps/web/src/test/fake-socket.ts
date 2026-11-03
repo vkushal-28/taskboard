@@ -17,7 +17,9 @@ export class FakeSocket implements RealtimeSocket {
   }
 
   disconnect(): void {
+    if (!this.connected) return;
     this.connected = false;
+    this.fire('disconnect', 'io client disconnect');
   }
 
   on(event: string, listener: Listener): void {
@@ -28,6 +30,10 @@ export class FakeSocket implements RealtimeSocket {
 
   off(event: string, listener: Listener): void {
     this.listeners.get(event)?.delete(listener);
+  }
+
+  emit(event: string, payload: unknown): void {
+    this.emitted.push({ event, payload });
   }
 
   emitWithAck(event: string, payload: unknown): Promise<unknown> {
@@ -43,6 +49,7 @@ export class FakeSocket implements RealtimeSocket {
   /** The connection drops and comes back, as Socket.IO's reconnect does. */
   reconnect(): void {
     this.connected = false;
+    this.fire('disconnect', 'transport close');
     this.connect();
   }
 

@@ -2,6 +2,11 @@ import { createServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
   BOARD_JOIN,
+  CARD_DRAG,
+  CARD_DRAGGING,
+  cardDraggingSchema,
+  PRESENCE_UPDATE,
+  presenceUpdateSchema,
   boardEventSchemas,
   type BoardEventName,
   type BoardJoinAck,
@@ -304,5 +309,170 @@ describe('emitToBoard', () => {
     } finally {
       setRealtimeServer(io);
     }
+  });
+});
+
+/** The next `name` event whose payload passes `match`, or a rejection after the timeout. */
+function nextSignal(
+  socket: ClientSocket,
+  name: string,
+  match: (payload: unknown) => boolean = () => true,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`no matching ${name}`)), EVENT_TIMEOUT_MS);
+    const listener = (event: string, payload: unknown) => {
+      if (event !== name || !match(payload)) return;
+      clearTimeout(timer);
+      socket.offAny(listener);
+      resolve(payload);
+    };
+    socket.onAny(listener);
+  });
+}
+
+const onlineIs =
+  (...ids: string[]) =>
+  (payload: unknown) => {
+    const parsed = presenceUpdateSchema.safeParse(payload);
+    return parsed.success && [...parsed.data.userIds].sort().join() === [...ids].sort().join();
+  };
+
+/** Resolves after the server has handled everything this socket sent before. */
+async function roundTrip(socket: ClientSocket): Promise<void> {
+  await join(socket, { boardId: 'not-an-id' });
+}
+
+describe('presence', () => {
+  it('tells everyone in the room who is online, the joiner included', async () => {
+    const { board, owner, member } = await createBoardWithRoles();
+    const first = await connectedAs(owner);
+    const firstSeesOwner = nextSignal(first, PRESENCE_UPDATE, onlineIs(owner.id));
+    await join(first, { boardId: board.id });
+    await firstSeesOwner;
+
+    const firstSeesBoth = nextSignal(first, PRESENCE_UPDATE, onlineIs(owner.id, member.id));
+    const second = await connectedAs(member);
+    const secondSeesBoth = nextSignal(second, PRESENCE_UPDATE, onlineIs(owner.id, member.id));
+    await join(second, { boardId: board.id });
+
+    await Promise.all([firstSeesBoth, secondSeesBoth]);
+  });
+
+  it('counts a user with two tabs once', async () => {
+    const { board, owner } = await createBoardWithRoles();
+    const tab1 = await connectedAs(owner);
+    await join(tab1, { boardId: board.id });
+    const tab2 = await connectedAs(owner);
+
+    const update = nextSignal(tab1, PRESENCE_UPDATE);
+    await join(tab2, { boardId: board.id });
+
+    expect(presenceUpdateSchema.parse(await update).userIds).toEqual([owner.id]);
+  });
+
+  it('drops a user who closes their tab or leaves the board', async () => {
+    const { board, owner, member, viewer } = await createBoardWithRoles();
+    const watcher = await connectedAs(owner);
+    await join(watcher, { boardId: board.id });
+    const closing = await connectedAs(member);
+    await join(closing, { boardId: board.id });
+    const leaving = await connectedAs(viewer);
+    await join(leaving, { boardId: board.id });
+
+    const afterClose = nextSignal(watcher, PRESENCE_UPDATE, onlineIs(owner.id, viewer.id));
+    closing.disconnect();
+    await afterClose;
+
+    const afterLeave = nextSignal(watcher, PRESENCE_UPDATE, onlineIs(owner.id));
+    leaving.emit('board:leave', { boardId: board.id });
+    await afterLeave;
+  });
+
+  it('keeps a user online while another of their tabs is still open', async () => {
+    const { board, owner, member } = await createBoardWithRoles();
+    const watcher = await connectedAs(owner);
+    await join(watcher, { boardId: board.id });
+    const tab1 = await connectedAs(member);
+    await join(tab1, { boardId: board.id });
+    const tab2 = await connectedAs(member);
+    await join(tab2, { boardId: board.id });
+
+    const update = nextSignal(watcher, PRESENCE_UPDATE);
+    tab1.disconnect();
+
+    expect([...presenceUpdateSchema.parse(await update).userIds].sort()).toEqual(
+      [owner.id, member.id].sort(),
+    );
+  });
+});
+
+describe('card drag cues', () => {
+  async function boardWithWatcher() {
+    const fixture = await createBoardWithRoles();
+    const list = await createList(fixture.board._id);
+    const card = await createCard(list);
+    const watcher = await connectedAs(fixture.owner);
+    await join(watcher, { boardId: fixture.board.id });
+    return { ...fixture, card, watcher };
+  }
+
+  it("relays a member's drag start and end to the others, not back to the sender", async () => {
+    const { board, member, card, watcher } = await boardWithWatcher();
+    const dragger = await connectedAs(member);
+    await join(dragger, { boardId: board.id });
+    let echoes = 0;
+    dragger.onAny((name: string) => {
+      if (name === CARD_DRAGGING) echoes += 1;
+    });
+
+    const started = nextSignal(watcher, CARD_DRAGGING);
+    dragger.emit(CARD_DRAG, { boardId: board.id, cardId: card.id });
+    expect(cardDraggingSchema.parse(await started)).toEqual({
+      boardId: board.id,
+      userId: member.id,
+      cardId: card.id,
+    });
+
+    const ended = nextSignal(watcher, CARD_DRAGGING);
+    dragger.emit(CARD_DRAG, { boardId: board.id, cardId: null });
+    expect(cardDraggingSchema.parse(await ended)).toMatchObject({ cardId: null });
+
+    await roundTrip(dragger);
+    expect(echoes).toBe(0);
+  });
+
+  it('ignores a drag from a viewer and from a socket that never joined', async () => {
+    const { board, viewer, member, card, watcher } = await boardWithWatcher();
+    let cues = 0;
+    watcher.onAny((name: string) => {
+      if (name === CARD_DRAGGING) cues += 1;
+    });
+
+    const viewerSocket = await connectedAs(viewer);
+    await join(viewerSocket, { boardId: board.id });
+    viewerSocket.emit(CARD_DRAG, { boardId: board.id, cardId: card.id });
+    const outsiderSocket = await connectedAs(member);
+    outsiderSocket.emit(CARD_DRAG, { boardId: board.id, cardId: card.id });
+
+    await Promise.all([roundTrip(viewerSocket), roundTrip(outsiderSocket)]);
+    await roundTrip(watcher);
+    expect(cues).toBe(0);
+  });
+
+  it('ends the drag when the dragging tab closes mid-drag', async () => {
+    const { board, member, card, watcher } = await boardWithWatcher();
+    const dragger = await connectedAs(member);
+    await join(dragger, { boardId: board.id });
+    const started = nextSignal(watcher, CARD_DRAGGING);
+    dragger.emit(CARD_DRAG, { boardId: board.id, cardId: card.id });
+    await started;
+
+    const ended = nextSignal(
+      watcher,
+      CARD_DRAGGING,
+      (payload) => cardDraggingSchema.safeParse(payload).data?.cardId === null,
+    );
+    dragger.disconnect();
+    expect(cardDraggingSchema.parse(await ended)).toMatchObject({ userId: member.id });
   });
 });

@@ -40,6 +40,8 @@ Sockets are read-only. Every write goes through REST and the routes above; the s
 - **Handshake:** needs a valid `tb_access` cookie, otherwise `connect_error` with `data.code = 'UNAUTHORIZED'`. A handshake whose `Origin` is not `CLIENT_URL` is refused (ADR 010).
 - **`board:join { boardId }`:** any role (viewer and up) joins the room `board:<id>`, and the reply is `{ ok: true, role }`. A non-member or a missing board gets `{ ok: false, error: { code: 'NOT_FOUND' } }`, the same rule as REST (ADR 005). A malformed id gets `VALIDATION_ERROR`.
 - **`board:leave { boardId }`:** leaves the room. No reply.
+- **`presence:update { boardId, userIds }`** (server to room): sent after every join, leave and disconnect. Each online user appears once (ADR 012).
+- **`card:drag { boardId, cardId | null }`** (client): member or owner only, and only from a socket that joined that board. A viewer's or outsider's drag is silently ignored. It is relayed to the rest of the room as **`card:dragging { boardId, userId, cardId | null }`** and never saved. A disconnect mid-drag sends `cardId: null`.
 - **Board events** (`card:*`, `list:*`, `board:updated`, `board:deleted`): sent to everyone in the room, including the actor's own sockets. Each payload carries `boardId` and `actorId`. Schemas are in `packages/shared/src/realtime.ts`.
 
 Membership is checked when a socket joins, not on every event. Phase 5 must remove a member's sockets from the room when they are removed from the board (ADR 010).

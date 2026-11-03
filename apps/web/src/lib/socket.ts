@@ -15,6 +15,8 @@ export interface RealtimeSocket {
   disconnect(): void;
   on(event: string, listener: Listener): void;
   off(event: string, listener: Listener): void;
+  /** Fire and forget. */
+  emit(event: string, payload: unknown): void;
   /** Emits and waits for the server's ack; rejects after a timeout. */
   emitWithAck(event: string, payload: unknown): Promise<unknown>;
 }
@@ -45,6 +47,7 @@ function createRealtimeSocket(): RealtimeSocket {
     disconnect: () => void socket.disconnect(),
     on: (event, listener) => void socket.on(event, listener),
     off: (event, listener) => void socket.off(event, listener),
+    emit: (event, payload) => void socket.emit(event, payload),
     emitWithAck: (event, payload) => socket.timeout(ACK_TIMEOUT_MS).emitWithAck(event, payload),
   };
 }

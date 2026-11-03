@@ -15,6 +15,14 @@ export const BOARD_LEAVE = 'board:leave';
 export const boardJoinSchema = z.object({ boardId: objectIdSchema });
 export type BoardJoinInput = z.infer<typeof boardJoinSchema>;
 
+/** Sent on drag start (`cardId`) and on drop or cancel (`null`). Never saved. */
+export const CARD_DRAG = 'card:drag';
+export const cardDragSchema = z.object({
+  boardId: objectIdSchema,
+  cardId: objectIdSchema.nullable(),
+});
+export type CardDragInput = z.infer<typeof cardDragSchema>;
+
 export type BoardJoinAck =
   { ok: true; role: Role } | { ok: false; error: { code: string; message: string } };
 
@@ -44,13 +52,38 @@ export type BoardEventName = keyof typeof boardEventSchemas;
 export type BoardEventPayload<E extends BoardEventName> = z.infer<(typeof boardEventSchemas)[E]>;
 export const BOARD_EVENTS = Object.keys(boardEventSchemas) as BoardEventName[];
 
+// Server -> client signals that are not DB writes: who is on the board and who is dragging
+// what. They live outside boardEventSchemas because they never touch the board cache.
+
+export const PRESENCE_UPDATE = 'presence:update';
+export const CARD_DRAGGING = 'card:dragging';
+
+export const presenceUpdateSchema = z.object({
+  boardId: z.string(),
+  /** Each online user once, however many tabs they have open. */
+  userIds: z.array(z.string()),
+});
+export type PresenceUpdate = z.infer<typeof presenceUpdateSchema>;
+
+export const cardDraggingSchema = z.object({
+  boardId: z.string(),
+  userId: z.string(),
+  /** `null` when the drag ended. */
+  cardId: z.string().nullable(),
+});
+export type CardDragging = z.infer<typeof cardDraggingSchema>;
+
 // Typed event maps for `new Server<...>()` and `io<...>()`.
 
 export type ServerToClientEvents = {
   [E in BoardEventName]: (payload: BoardEventPayload<E>) => void;
+} & {
+  [PRESENCE_UPDATE]: (payload: PresenceUpdate) => void;
+  [CARD_DRAGGING]: (payload: CardDragging) => void;
 };
 
 export interface ClientToServerEvents {
   [BOARD_JOIN]: (payload: BoardJoinInput, ack: (result: BoardJoinAck) => void) => void;
   [BOARD_LEAVE]: (payload: BoardJoinInput) => void;
+  [CARD_DRAG]: (payload: CardDragInput) => void;
 }

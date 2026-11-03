@@ -1,6 +1,6 @@
-import { BOARD_JOIN, type BoardDetail } from '@taskboard/shared';
+import { BOARD_JOIN, CARD_DRAGGING, PRESENCE_UPDATE, type BoardDetail } from '@taskboard/shared';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, renderHook, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -14,7 +14,8 @@ import { authKeys } from '../auth/keys';
 import { boardKeys, useBoard } from '../boards/api';
 import { useMoveCard } from './api';
 import { groupCards, planMove } from './ordering';
-import { BOARD_DELETED_MESSAGE, useBoardSocket } from './useBoardSocket';
+import { useLiveStore } from './live-store';
+import { BOARD_DELETED_MESSAGE, sendCardDrag, useBoardSocket } from './useBoardSocket';
 
 const KEY = boardKeys.detail('b1');
 const priya = { id: 'u1', name: 'Priya Sharma', email: 'priya@acme.dev' };
@@ -235,5 +236,79 @@ describe('board:deleted', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
     expect(useToastStore.getState().toasts.map((t) => t.message)).toEqual([BOARD_DELETED_MESSAGE]);
     await waitFor(() => expect(queryClient.getQueryData(KEY)).toBeUndefined());
+  });
+});
+
+describe('presence and drag cues', () => {
+  async function openBoard() {
+    stubApi({
+      'GET /auth/me': () => json(200, { user: priya }),
+      'GET /boards/b1': () => json(200, boardDetail()),
+    });
+    renderApp('/b/b1');
+    await screen.findByRole('heading', { name: 'Website Redesign', level: 1 });
+    await waitFor(() => expect(fakeSocket.emitted).toHaveLength(1));
+  }
+
+  const toasts = () => useToastStore.getState().toasts.map((t) => t.message);
+
+  it('shows who is online in the board header', async () => {
+    await openBoard();
+
+    act(() => fakeSocket.serverEmit(PRESENCE_UPDATE, { boardId: 'b1', userIds: ['u1', 'u2'] }));
+
+    const presence = screen.getByTestId('presence');
+    expect(presence).toHaveTextContent('2 online');
+    expect(within(presence).getByTitle('Alex Kim is online')).toBeInTheDocument();
+  });
+
+  it('shows "<name> is moving this" on a card someone else drags, until they drop it', async () => {
+    await openBoard();
+    const tile = screen.getByTestId('card-c2');
+
+    act(() => fakeSocket.serverEmit(CARD_DRAGGING, { boardId: 'b1', userId: 'u2', cardId: 'c2' }));
+    expect(within(tile).getByRole('status')).toHaveTextContent('Alex Kim is moving this');
+
+    act(() => fakeSocket.serverEmit(CARD_DRAGGING, { boardId: 'b1', userId: 'u2', cardId: null }));
+    expect(within(tile).queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('forgets presence and drag cues when the connection drops', async () => {
+    await openBoard();
+    act(() => fakeSocket.serverEmit(PRESENCE_UPDATE, { boardId: 'b1', userIds: ['u1', 'u2'] }));
+    act(() => fakeSocket.serverEmit(CARD_DRAGGING, { boardId: 'b1', userId: 'u2', cardId: 'c2' }));
+
+    act(() => fakeSocket.disconnect());
+
+    expect(useLiveStore.getState()).toMatchObject({ onlineUserIds: [], draggingByCard: {} });
+    expect(screen.queryByTestId('presence')).not.toBeInTheDocument();
+  });
+
+  it("shows a toast for someone else's move to another list, but not for the user's own", async () => {
+    await openBoard();
+    const move = (actorId: string, cardId: string) => ({
+      boardId: 'b1',
+      actorId,
+      card: card(cardId, 'l3', 'a0'),
+      fromListId: 'l1',
+    });
+
+    act(() => fakeSocket.serverEmit('card:moved', move('u1', 'c1')));
+    act(() => fakeSocket.serverEmit('card:moved', move('u2', 'c2')));
+
+    expect(toasts()).toEqual(['Alex Kim moved "Card c2" to Done']);
+  });
+
+  it('sends drag start and end only while connected', () => {
+    sendCardDrag('b1', 'c1');
+    expect(fakeSocket.emitted).toEqual([]);
+
+    fakeSocket.connect();
+    sendCardDrag('b1', 'c1');
+    sendCardDrag('b1', null);
+    expect(fakeSocket.emitted).toEqual([
+      { event: 'card:drag', payload: { boardId: 'b1', cardId: 'c1' } },
+      { event: 'card:drag', payload: { boardId: 'b1', cardId: null } },
+    ]);
   });
 });

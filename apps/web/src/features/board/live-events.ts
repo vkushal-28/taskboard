@@ -87,3 +87,17 @@ export function cardIdOf(event: BoardEvent): string | undefined {
       return undefined;
   }
 }
+
+/**
+ * "Alex moved "Homepage" to Done", for a move someone else made to another list. Reorders
+ * within a list stay quiet: they are frequent and the card is still where people look for it.
+ */
+export function describeRemoteMove(
+  detail: BoardDetail,
+  { actorId, card, fromListId }: BoardEventPayload<'card:moved'>,
+): string | null {
+  if (card.listId === fromListId) return null;
+  const actor = detail.board.members.find((member) => member.id === actorId)?.name ?? 'Someone';
+  const list = detail.lists.find((candidate) => candidate.id === card.listId)?.title;
+  return list ? `${actor} moved "${card.title}" to ${list}` : null;
+}

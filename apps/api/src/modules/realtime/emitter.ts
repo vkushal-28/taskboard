@@ -3,13 +3,19 @@ import {
   type BoardEventName,
   type BoardEventPayload,
   type ClientToServerEvents,
+  type Role,
   type ServerToClientEvents,
 } from '@taskboard/shared';
 import type { Server } from 'socket.io';
 import { logger } from '../../lib/logger.js';
 
+// Plain objects, not Maps: a multi-instance adapter serializes socket.data (ADR 012).
 export interface SocketData {
   userId: string;
+  /** The role each joined board granted at join time. */
+  boards: Partial<Record<string, Role>>;
+  /** The card this socket is dragging, so a disconnect can clear the "moving this" cue. */
+  dragging: { boardId: string; cardId: string } | null;
 }
 
 export type RealtimeServer = Server<

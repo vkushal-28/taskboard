@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Avatar } from '../../components/Avatar';
 import { useNow } from '../../lib/time';
+import { useLiveStore } from './live-store';
 
 const dueFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' });
 
@@ -84,6 +85,8 @@ export function SortableCard({ card, members, listId, disabled }: SortableCardPr
     data: { type: 'card', listId },
     disabled,
   });
+  const movingUserId = useLiveStore((state) => state.draggingByCard[card.id]);
+  const movingName = movingUserId ? (members.get(movingUserId)?.name ?? 'Someone') : null;
 
   return (
     <li
@@ -93,12 +96,19 @@ export function SortableCard({ card, members, listId, disabled }: SortableCardPr
       // The original stays in place as a faded gap; the DragOverlay follows the pointer.
       className={`list-none rounded-lg focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none ${
         isDragging ? 'opacity-40' : ''
-      } ${disabled ? '' : 'cursor-grab active:cursor-grabbing'}`}
+      } ${disabled ? '' : 'cursor-grab active:cursor-grabbing'} ${
+        movingName ? 'ring-2 ring-amber-400' : ''
+      }`}
       aria-label={card.title}
       {...attributes}
       {...listeners}
     >
       <CardTile card={card} members={members} />
+      {movingName && (
+        <p role="status" className="px-1 pt-1 text-xs font-medium text-amber-700">
+          {movingName} is moving this
+        </p>
+      )}
     </li>
   );
 }
