@@ -5,7 +5,9 @@ import {
   applyBoardEvent,
   cardIdOf,
   describeRemoteMove,
+  mergeBoardDetail,
   parseBoardEvent,
+  putCard,
   type BoardEvent,
 } from './live-events';
 import { groupCards } from './ordering';
@@ -135,5 +137,44 @@ describe('describeRemoteMove', () => {
     expect(describeRemoteMove(boardDetail(), moved('l3', 'l1', 'u9'))).toBe(
       'Someone moved "Homepage" to Done',
     );
+  });
+});
+
+describe('card versions (ADR 013)', () => {
+  const held = () => boardDetail().cards;
+
+  it('ignores a copy older than the one held, from a response or an event', () => {
+    const newer = putCard(held(), card('c1', 'l1', 'a0', { title: 'Newer', version: 3 }));
+
+    expect(putCard(newer, card('c1', 'l1', 'a0', { title: 'Older', version: 2 }))).toBe(newer);
+    const viaEvent = applyBoardEvent(
+      { ...boardDetail(), cards: newer },
+      event('card:updated', { card: card('c1', 'l1', 'a0', { title: 'Older', version: 2 }) }),
+    );
+    expect(viaEvent.cards.find((c) => c.id === 'c1')?.title).toBe('Newer');
+  });
+
+  it('takes an equal or newer copy', () => {
+    const cards = putCard(held(), card('c1', 'l1', 'a0', { title: 'Same version', version: 0 }));
+    expect(cards.find((c) => c.id === 'c1')?.title).toBe('Same version');
+  });
+
+  it('keeps a newer cached card when a slower refetch lands, and drops cards the server no longer has', () => {
+    const cached = {
+      ...boardDetail(),
+      cards: putCard(held(), card('c1', 'l1', 'a0', { title: 'From the socket', version: 4 })),
+    };
+    const fetched = {
+      ...boardDetail(),
+      cards: boardDetail()
+        .cards.filter((c) => c.id !== 'c3')
+        .map((c) => (c.id === 'c2' ? { ...c, title: 'Fetched', version: 1 } : c)),
+    };
+
+    const merged = mergeBoardDetail(cached, fetched);
+
+    expect(merged.cards.find((c) => c.id === 'c1')?.title).toBe('From the socket');
+    expect(merged.cards.find((c) => c.id === 'c2')?.title).toBe('Fetched');
+    expect(merged.cards.map((c) => c.id)).not.toContain('c3');
   });
 });

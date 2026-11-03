@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router';
+import { Link, Outlet, useParams } from 'react-router';
 import { AppHeader } from '../../components/AppHeader';
 import { isApiError } from '../../lib/api-error';
 import { useBoard } from '../boards/api';
@@ -33,6 +33,7 @@ export function BoardPage() {
           <main className="min-h-0 flex-1 pt-4">
             <BoardCanvas detail={board.data} />
           </main>
+          <Outlet />
         </>
       )}
     </div>

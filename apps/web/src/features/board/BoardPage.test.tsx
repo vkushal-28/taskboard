@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { boardDetail, card, list, MEMBER } from '../../test/board-fixtures';
 import { errorResponse, json } from '../../test/http';
 import { renderApp, stubApi, type FakeRoute } from '../../test/render';
+import { fakeSocket } from '../../test/fake-socket';
 
 const priya = { id: 'u1', name: 'Priya Sharma', email: 'priya@acme.dev' };
 
@@ -107,8 +108,10 @@ describe('Board page', () => {
     expect(screen.queryByRole('button', { name: /Add a card/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add a list/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
-    // dnd-kit marks disabled sortables, so cards cannot be picked up.
-    expect(screen.getByTestId('card-c1')).toHaveAttribute('aria-disabled', 'true');
+    // Cards still open for viewers, but Space doesn't pick them up.
+    screen.getByTestId('card-c1').focus();
+    await userEvent.keyboard(' ');
+    expect(fakeSocket.emitted.filter((sent) => sent.event === 'card:drag')).toEqual([]);
   });
 
   it('explains a board that does not exist or is not shared', async () => {

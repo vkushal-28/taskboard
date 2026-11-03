@@ -1,6 +1,8 @@
 import type { BoardMemberDto, CardDto } from '@taskboard/shared';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { KeyboardEvent } from 'react';
+import { useNavigate } from 'react-router';
 import { Avatar } from '../../components/Avatar';
 import { useNow } from '../../lib/time';
 import { useLiveStore } from './live-store';
@@ -87,6 +89,18 @@ export function SortableCard({ card, members, listId, disabled }: SortableCardPr
   });
   const movingUserId = useLiveStore((state) => state.draggingByCard[card.id]);
   const movingName = movingUserId ? (members.get(movingUserId)?.name ?? 'Someone') : null;
+  const navigate = useNavigate();
+  const open = () => void navigate(`/b/${card.boardId}/c/${card.id}`);
+
+  // Space picks the card up (BoardCanvas limits dnd-kit's keyboard sensor to Space), Enter
+  // opens it. A click opens it too; the pointer sensor's 5 px threshold keeps drags apart.
+  function onKeyDown(event: KeyboardEvent<HTMLLIElement>) {
+    listeners?.onKeyDown?.(event);
+    if (event.key === 'Enter' && !isDragging && !event.defaultPrevented) {
+      event.preventDefault();
+      open();
+    }
+  }
 
   return (
     <li
@@ -102,6 +116,10 @@ export function SortableCard({ card, members, listId, disabled }: SortableCardPr
       aria-label={card.title}
       {...attributes}
       {...listeners}
+      // Viewers can't drag, but the card still opens, so it isn't a disabled button.
+      aria-disabled={undefined}
+      onClick={open}
+      onKeyDown={onKeyDown}
     >
       <CardTile card={card} members={members} />
       {movingName && (

@@ -1,5 +1,6 @@
 import type { BoardDetail, CardDto } from '@taskboard/shared';
 import { generateKeyBetween } from 'fractional-indexing';
+import { isOlderCard } from './live-events';
 
 /** Card ids per list id, in display order. */
 export type Columns = Record<string, string[]>;
@@ -93,6 +94,12 @@ export function applyMove(detail: BoardDetail, plan: MovePlan): BoardDetail {
   };
 }
 
+/** The server's copy after a move. Ignored if a newer copy already arrived over the socket. */
 export function replaceCard(detail: BoardDetail, next: CardDto): BoardDetail {
-  return { ...detail, cards: detail.cards.map((card) => (card.id === next.id ? next : card)) };
+  return {
+    ...detail,
+    cards: detail.cards.map((card) =>
+      card.id === next.id && !isOlderCard(next, card) ? next : card,
+    ),
+  };
 }

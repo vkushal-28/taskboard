@@ -38,7 +38,11 @@ export function BoardCanvas({ detail }: { detail: BoardDetail }) {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_PX } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    // Space picks a card up and drops it; Enter is left free to open the card.
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+      keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space'] },
+    }),
   );
 
   const lists = useMemo(() => [...detail.lists].sort(byPosition), [detail.lists]);

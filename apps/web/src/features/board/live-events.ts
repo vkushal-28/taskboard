@@ -32,9 +32,41 @@ function upsert<T extends { id: string }>(items: T[], item: T): T[] {
     : [...items, item];
 }
 
-// The board view only holds visible cards, the same as GET /boards/:id.
-function putCard(cards: CardDto[], card: CardDto): CardDto[] {
+/**
+ * True when `incoming` is older than the copy already held. A response and a socket event
+ * travel on different connections, so the newer one can arrive first (ADR 013).
+ */
+export function isOlderCard(incoming: CardDto, held: CardDto | undefined): boolean {
+  return held !== undefined && held.version > incoming.version;
+}
+
+// The board view only holds visible cards, the same as GET /boards/:id. A copy older than
+// the one held is ignored, so whichever arrives last can't roll the card back.
+export function putCard(cards: CardDto[], card: CardDto): CardDto[] {
+  if (
+    isOlderCard(
+      card,
+      cards.find((existing) => existing.id === card.id),
+    )
+  )
+    return cards;
   return card.archived ? cards.filter((existing) => existing.id !== card.id) : upsert(cards, card);
+}
+
+/**
+ * For the board query's `structuralSharing`: a refetch that started before a newer write
+ * reached this client keeps that newer card. Anything the server no longer returns is gone.
+ */
+export function mergeBoardDetail(held: BoardDetail | undefined, fetched: BoardDetail): BoardDetail {
+  if (!held) return fetched;
+  const heldById = new Map(held.cards.map((card) => [card.id, card]));
+  return {
+    ...fetched,
+    cards: fetched.cards.map((card) => {
+      const newer = heldById.get(card.id);
+      return newer && isOlderCard(card, newer) ? newer : card;
+    }),
+  };
 }
 
 /**
