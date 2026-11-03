@@ -13,7 +13,7 @@ import {
   signAccessToken,
 } from './tokens.js';
 
-const BCRYPT_COST = 12;
+export const BCRYPT_COST = 12;
 // Two tabs can refresh with the same cookie at once. Within this window a reused token is
 // treated as that race, not as theft, so the session survives.
 export const REFRESH_REUSE_GRACE_MS = 10_000;

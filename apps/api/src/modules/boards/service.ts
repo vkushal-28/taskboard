@@ -12,6 +12,7 @@ import { ActivityModel } from '../activity/model.js';
 import { logActivity } from '../activity/service.js';
 import { CardModel, toCardDto } from '../cards/model.js';
 import { ListModel, toListDto } from '../lists/model.js';
+import { closeBoardRoom, emitToBoard } from '../realtime/emitter.js';
 import { BoardModel, type BoardMember } from './model.js';
 
 const STARTER_LISTS = ['To Do', 'In Progress', 'Done'];
@@ -118,13 +119,22 @@ export async function updateBoard(
     type: 'board.updated',
     meta: { fields: Object.keys(input) },
   });
+  emitToBoard(boardId, 'board:updated', {
+    boardId,
+    actorId,
+    board: { id: boardId, title: board.title, color: board.color },
+  });
   return toBoardSummary(board, myRole);
 }
 
-export async function deleteBoard(boardId: string): Promise<void> {
+export async function deleteBoard(boardId: string, actorId: string): Promise<void> {
   // Board first (ADR 006): once it is gone the access check fails, so any children a crash
   // leaves behind cannot be reached.
   await BoardModel.deleteOne({ _id: boardId });
+  // The board is gone for everyone now, so tell viewers before the cleanup, which can fail on
+  // its own. Then empty the room so no later event reaches them.
+  emitToBoard(boardId, 'board:deleted', { boardId, actorId });
+  closeBoardRoom(boardId);
   await Promise.all([
     ListModel.deleteMany({ boardId }),
     CardModel.deleteMany({ boardId }),

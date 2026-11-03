@@ -27,6 +27,6 @@ export const updateBoard: WithBody<UpdateBoardInput> = async (req, res) => {
 };
 
 export const deleteBoard: RequestHandler = async (req, res) => {
-  await boardsService.deleteBoard(getBoardContext(req).boardId);
+  await boardsService.deleteBoard(getBoardContext(req).boardId, getAuthUserId(req));
   res.status(204).end();
 };

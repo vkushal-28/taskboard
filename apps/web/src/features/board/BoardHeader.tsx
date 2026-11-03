@@ -1,12 +1,16 @@
 import type { BoardDetail } from '@taskboard/shared';
 import { Avatar } from '../../components/Avatar';
 import { RoleBadge } from '../../components/RoleBadge';
+import { useLiveStore } from './live-store';
 
 const MAX_AVATARS = 4;
 
 export function BoardHeader({ board }: { board: BoardDetail['board'] }) {
-  const shown = board.members.slice(0, MAX_AVATARS);
-  const hidden = board.members.length - shown.length;
+  const onlineUserIds = useLiveStore((state) => state.onlineUserIds);
+  // Members only: an id the cached board doesn't know yet (a brand-new member) has no name.
+  const online = board.members.filter((member) => onlineUserIds.includes(member.id));
+  const shown = online.slice(0, MAX_AVATARS);
+  const hidden = online.length - shown.length;
 
   return (
     <div
@@ -17,19 +21,30 @@ export function BoardHeader({ board }: { board: BoardDetail['board'] }) {
       <RoleBadge role={board.myRole} />
 
       <div className="ml-auto flex items-center gap-3">
-        {/* Phase 4 replaces this with live presence; for now it lists the board's members. */}
-        <div className="flex -space-x-2" aria-label={`${board.members.length} members`}>
-          {shown.map((member) => (
-            <span key={member.id} title={member.name} className="rounded-full ring-2 ring-white">
-              <Avatar id={member.id} name={member.name} />
+        {online.length > 0 && (
+          <div className="flex items-center gap-2" data-testid="presence">
+            <div className="flex -space-x-2">
+              {shown.map((member) => (
+                <span
+                  key={member.id}
+                  title={`${member.name} is online`}
+                  className="rounded-full ring-2 ring-white"
+                >
+                  <Avatar id={member.id} name={member.name} />
+                </span>
+              ))}
+              {hidden > 0 && (
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-200 text-xs font-medium text-slate-700 ring-2 ring-white">
+                  +{hidden}
+                </span>
+              )}
+            </div>
+            <span className="flex items-center gap-1.5 text-sm text-slate-600">
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-500" />
+              {online.length} online
             </span>
-          ))}
-          {hidden > 0 && (
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-200 text-xs font-medium text-slate-700 ring-2 ring-white">
-              +{hidden}
-            </span>
-          )}
-        </div>
+          </div>
+        )}
         <SoonButton label="Filter" />
         {board.myRole === 'owner' && <SoonButton label="Share" />}
       </div>

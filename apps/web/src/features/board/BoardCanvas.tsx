@@ -19,6 +19,7 @@ import { useCreateList, useMoveCard } from './api';
 import { CardTile } from './CardTile';
 import { InlineAddForm } from './InlineAddForm';
 import { ListColumn } from './ListColumn';
+import { sendCardDrag } from './useBoardSocket';
 import { byPosition, dropOrder, findListOf, groupCards, planMove, type Columns } from './ordering';
 
 // Below this distance a press is a click, not a drag (Phase 5 opens the card on click).
@@ -59,6 +60,7 @@ export function BoardCanvas({ detail }: { detail: BoardDetail }) {
   function handleDragStart({ active }: DragStartEvent) {
     setActiveId(String(active.id));
     setDrag({ base: detail, columns: groupCards(detail) });
+    sendCardDrag(boardId, String(active.id));
   }
 
   // Crossing into another list moves the card in the working copy. Reordering within one list
@@ -78,6 +80,7 @@ export function BoardCanvas({ detail }: { detail: BoardDetail }) {
     const cardId = String(active.id);
     const working = drag?.columns;
     setActiveId(null);
+    sendCardDrag(boardId, null);
     const listId = working && findListOf(working, cardId);
     if (!over || !working || !listId) return setDrag(null);
 
@@ -92,6 +95,7 @@ export function BoardCanvas({ detail }: { detail: BoardDetail }) {
   }
 
   function cancelDrag() {
+    sendCardDrag(boardId, null);
     setActiveId(null);
     setDrag(null);
   }

@@ -3,6 +3,7 @@ import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
 import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
 import { logActivity } from '../activity/service.js';
 import { CardModel } from '../cards/model.js';
+import { emitToBoard } from '../realtime/emitter.js';
 import { ListModel, toListDto } from './model.js';
 
 export async function createList(
@@ -21,7 +22,9 @@ export async function createList(
     type: 'list.created',
     meta: { listId: list.id, title: list.title },
   });
-  return toListDto(list);
+  const dto = toListDto(list);
+  emitToBoard(boardId, 'list:created', { boardId, actorId, list: dto });
+  return dto;
 }
 
 export async function renameList(
@@ -43,7 +46,9 @@ export async function renameList(
     type: 'list.renamed',
     meta: { listId, title: list.title },
   });
-  return toListDto(list);
+  const dto = toListDto(list);
+  emitToBoard(boardId, 'list:updated', { boardId, actorId, list: dto });
+  return dto;
 }
 
 export async function moveList(
@@ -76,7 +81,9 @@ export async function moveList(
   if (!list) throw new NotFound('List not found');
 
   await logActivity({ boardId, actorId, type: 'list.moved', meta: { listId } });
-  return toListDto(list);
+  const dto = toListDto(list);
+  emitToBoard(boardId, 'list:moved', { boardId, actorId, list: dto });
+  return dto;
 }
 
 export async function deleteList(boardId: string, listId: string, actorId: string): Promise<void> {
@@ -93,6 +100,7 @@ export async function deleteList(boardId: string, listId: string, actorId: strin
     type: 'list.deleted',
     meta: { listId, title: list.title },
   });
+  emitToBoard(boardId, 'list:deleted', { boardId, actorId, listId });
 }
 
 /** A neighbour that is missing or on another board means the client's view is stale. */

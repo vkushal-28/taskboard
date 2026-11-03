@@ -4,10 +4,12 @@ import { isApiError } from '../../lib/api-error';
 import { useBoard } from '../boards/api';
 import { BoardCanvas } from './BoardCanvas';
 import { BoardHeader } from './BoardHeader';
+import { useBoardSocket } from './useBoardSocket';
 
 export function BoardPage() {
   const { boardId = '' } = useParams();
   const board = useBoard(boardId);
+  useBoardSocket(boardId);
 
   return (
     <div className="flex h-screen flex-col bg-slate-50">
