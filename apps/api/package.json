@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed": "tsx --conditions=source --env-file-if-exists=../../.env src/scripts/seed.ts"
   },
   "dependencies": {
     "@taskboard/shared": "workspace:*",
