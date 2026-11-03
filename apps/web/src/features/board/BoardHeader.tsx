@@ -9,8 +9,12 @@ export function BoardHeader({ board }: { board: BoardDetail['board'] }) {
   const onlineUserIds = useLiveStore((state) => state.onlineUserIds);
   // Members only: an id the cached board doesn't know yet (a brand-new member) has no name.
   const online = board.members.filter((member) => onlineUserIds.includes(member.id));
-  const shown = online.slice(0, MAX_AVATARS);
-  const hidden = online.length - shown.length;
+  // The viewer is always in the list once joined, so an empty one means "not known yet"
+  // (connecting, or offline). Show the members dimmed rather than nobody.
+  const live = online.length > 0;
+  const people = live ? online : board.members;
+  const shown = people.slice(0, MAX_AVATARS);
+  const hidden = people.length - shown.length;
 
   return (
     <div
@@ -21,30 +25,34 @@ export function BoardHeader({ board }: { board: BoardDetail['board'] }) {
       <RoleBadge role={board.myRole} />
 
       <div className="ml-auto flex items-center gap-3">
-        {online.length > 0 && (
-          <div className="flex items-center gap-2" data-testid="presence">
-            <div className="flex -space-x-2">
-              {shown.map((member) => (
-                <span
-                  key={member.id}
-                  title={`${member.name} is online`}
-                  className="rounded-full ring-2 ring-white"
-                >
-                  <Avatar id={member.id} name={member.name} />
-                </span>
-              ))}
-              {hidden > 0 && (
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-200 text-xs font-medium text-slate-700 ring-2 ring-white">
-                  +{hidden}
-                </span>
-              )}
-            </div>
-            <span className="flex items-center gap-1.5 text-sm text-slate-600">
-              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-500" />
-              {online.length} online
-            </span>
+        <div className="flex items-center gap-2" data-testid="presence">
+          <div className={`flex -space-x-2 ${live ? '' : 'opacity-50'}`}>
+            {shown.map((member) => (
+              <span
+                key={member.id}
+                title={live ? `${member.name} is online` : member.name}
+                className="rounded-full ring-2 ring-white"
+              >
+                <Avatar id={member.id} name={member.name} />
+              </span>
+            ))}
+            {hidden > 0 && (
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-200 text-xs font-medium text-slate-700 ring-2 ring-white">
+                +{hidden}
+              </span>
+            )}
           </div>
-        )}
+          <span className="flex items-center gap-1.5 text-sm text-slate-600">
+            {live ? (
+              <>
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-500" />
+                {online.length} online
+              </>
+            ) : (
+              `${board.members.length} ${board.members.length === 1 ? 'member' : 'members'}`
+            )}
+          </span>
+        </div>
         <SoonButton label="Filter" />
         {board.myRole === 'owner' && <SoonButton label="Share" />}
       </div>

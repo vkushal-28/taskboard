@@ -47,11 +47,14 @@ export function useBoardSocket(boardId: string): void {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const userId = useAuth().user?.id;
-  // Read through a ref so a change of user (sign-out) doesn't reconnect the socket.
+  // Read through refs, so a change of user (sign-out) or of the navigate function doesn't
+  // reconnect the socket.
   const userIdRef = useRef(userId);
+  const navigateRef = useRef(navigate);
   useEffect(() => {
     userIdRef.current = userId;
-  }, [userId]);
+    navigateRef.current = navigate;
+  }, [userId, navigate]);
 
   useEffect(() => {
     const socket = getRealtimeSocket();
@@ -59,6 +62,9 @@ export function useBoardSocket(boardId: string): void {
     const mutationCache = queryClient.getMutationCache();
     let stopWaiting: (() => void) | null = null;
     let sessionRetried = false;
+    // Set by the cleanup. Work that finishes after it (a join ack, a session refresh) must
+    // not touch the socket or the cache for a board the user has left.
+    let disposed = false;
 
     const movesInFlight = () =>
       mutationCache.findAll({ mutationKey: moveCardKey(boardId), status: 'pending' });
@@ -74,6 +80,7 @@ export function useBoardSocket(boardId: string): void {
     // A refetch that lands during a move would show the card back in its old place, so wait
     // until every move on this board has settled.
     function refetchWhenIdle() {
+      if (disposed) return;
       if (movesInFlight().length === 0) {
         void queryClient.invalidateQueries({ queryKey });
         return;
@@ -89,6 +96,7 @@ export function useBoardSocket(boardId: string): void {
     async function join() {
       try {
         const ack = await socket.emitWithAck(BOARD_JOIN, { boardId });
+        if (disposed) return;
         // Not a member or no such board: the board query already shows that error.
         if (!joinedAckSchema.safeParse(ack).success) return;
         // Events sent before this join (while offline, or since a cached copy was loaded) are
@@ -104,7 +112,7 @@ export function useBoardSocket(boardId: string): void {
       showToast(BOARD_DELETED_MESSAGE, 'info');
       void queryClient.invalidateQueries({ queryKey: boardKeys.list() });
       // Remove the board only after leaving its page, or the page would refetch it and 404.
-      void Promise.resolve(navigate('/', { replace: true })).then(() =>
+      void Promise.resolve(navigateRef.current('/', { replace: true })).then(() =>
         queryClient.removeQueries({ queryKey }),
       );
     }
@@ -154,7 +162,8 @@ export function useBoardSocket(boardId: string): void {
       if (!parsed.success || parsed.data.data.code !== 'UNAUTHORIZED' || sessionRetried) return;
       sessionRetried = true;
       void api.recoverSession().then((ok) => {
-        if (ok) socket.connect();
+        // Reconnecting after the user left would leave an open socket with no listeners.
+        if (ok && !disposed) socket.connect();
       });
     };
 
@@ -180,6 +189,7 @@ export function useBoardSocket(boardId: string): void {
     else socket.connect();
 
     return () => {
+      disposed = true;
       [...eventListeners, ...signalListeners].forEach(({ name, listener }) =>
         socket.off(name, listener),
       );
@@ -188,5 +198,5 @@ export function useBoardSocket(boardId: string): void {
       // Disconnecting leaves every room. The next board page connects again.
       socket.disconnect();
     };
-  }, [boardId, navigate, queryClient]);
+  }, [boardId, queryClient]);
 }
