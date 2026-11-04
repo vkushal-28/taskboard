@@ -40,9 +40,15 @@ export async function loginAs(app: Express, email: string, password = DEFAULT_PA
   return agent;
 }
 
-/** A `Cookie` header value that authenticates as `user`, for apps without the auth routes. */
-export async function accessCookieFor(user: HydratedDocument<User>): Promise<string> {
-  return `${ACCESS_COOKIE}=${await signAccessToken(user.id)}`;
+/**
+ * A `Cookie` header value that authenticates as `user`, for apps without the auth routes.
+ * Each call is a new session unless `sessionId` names one.
+ */
+export async function accessCookieFor(
+  user: HydratedDocument<User>,
+  sessionId: string = randomUUID(),
+): Promise<string> {
+  return `${ACCESS_COOKIE}=${await signAccessToken(user.id, sessionId)}`;
 }
 
 export async function createBoard(

@@ -14,17 +14,25 @@ import {
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from '@taskboard/shared';
+import { SignJWT } from 'jose';
 import { io as connect, type Socket } from 'socket.io-client';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   accessCookieFor,
+  cookieValue,
   createBoardWithRoles,
   createCard,
   createList,
   createUser,
+  DEFAULT_PASSWORD,
+  getCookie,
 } from '../../../test/factories.js';
 import { createApp } from '../../app.js';
+import { ACCESS_COOKIE, REFRESH_COOKIE } from '../auth/cookies.js';
+import { RefreshTokenModel } from '../auth/model.js';
+import { REFRESH_REUSE_GRACE_MS } from '../auth/service.js';
+import { hashRefreshToken } from '../auth/tokens.js';
 import { BoardModel } from '../boards/model.js';
 import { emitToBoard, setRealtimeServer, type RealtimeServer } from './emitter.js';
 import { createRealtimeServer } from './server.js';
@@ -126,6 +134,81 @@ describe('socket handshake', () => {
 
   it('accepts a valid cookie from the web app origin', async () => {
     await connectedAs(await createUser());
+  });
+
+  it('rejects an access token without a session id', async () => {
+    const user = await createUser();
+    const noSession = await new SignJWT()
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(user.id)
+      .setExpirationTime('15m')
+      .sign(new TextEncoder().encode(process.env.JWT_ACCESS_SECRET));
+    const socket = open({ cookie: `${ACCESS_COOKIE}=${noSession}`, origin: CLIENT_ORIGIN });
+    expect(await connectResult(socket)).toEqual({ code: 'UNAUTHORIZED' });
+  });
+});
+
+describe('session end', () => {
+  /** Logs in through REST, so the tokens belong to a real refresh family. */
+  async function signIn(email: string) {
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email, password: DEFAULT_PASSWORD })
+      .expect(200);
+    const access = cookieValue(getCookie(res, ACCESS_COOKIE));
+    const refresh = cookieValue(getCookie(res, REFRESH_COOKIE));
+    if (!access || !refresh) throw new Error('login did not set both cookies');
+    const socket = open({ cookie: `${ACCESS_COOKIE}=${access}`, origin: CLIENT_ORIGIN });
+    expect(await connectResult(socket)).toEqual({ connected: true });
+    return { socket, refresh };
+  }
+
+  function serverDisconnect(socket: ClientSocket): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('not disconnected')), EVENT_TIMEOUT_MS);
+      socket.once('disconnect', (reason) => {
+        clearTimeout(timer);
+        resolve(reason);
+      });
+    });
+  }
+
+  it("disconnects the session's sockets on logout, not the user's other sessions", async () => {
+    const user = await createUser();
+    const laptop = await signIn(user.email);
+    const phone = await signIn(user.email);
+
+    const closed = serverDisconnect(laptop.socket);
+    await request(app)
+      .post('/auth/logout')
+      .set('Cookie', `${REFRESH_COOKIE}=${laptop.refresh}`)
+      .expect(204);
+
+    expect(await closed).toBe('io server disconnect');
+    await roundTrip(phone.socket);
+    expect(phone.socket.connected).toBe(true);
+  });
+
+  it('disconnects every socket of a session revoked for refresh token reuse', async () => {
+    const user = await createUser();
+    const victim = await signIn(user.email);
+    // The victim rotates; the old token, replayed after the grace window, is theft.
+    await request(app)
+      .post('/auth/refresh')
+      .set('Cookie', `${REFRESH_COOKIE}=${victim.refresh}`)
+      .expect(204);
+    await RefreshTokenModel.updateOne(
+      { tokenHash: hashRefreshToken(victim.refresh) },
+      { revokedAt: new Date(Date.now() - REFRESH_REUSE_GRACE_MS - 1_000) },
+    );
+
+    const closed = serverDisconnect(victim.socket);
+    await request(app)
+      .post('/auth/refresh')
+      .set('Cookie', `${REFRESH_COOKIE}=${victim.refresh}`)
+      .expect(401);
+
+    expect(await closed).toBe('io server disconnect');
   });
 });
 

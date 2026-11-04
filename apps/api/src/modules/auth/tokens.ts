@@ -8,8 +8,18 @@ export const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 
-export async function signAccessToken(userId: string): Promise<string> {
-  return new SignJWT()
+/** Who a valid access token belongs to, and which refresh family (session) issued it. */
+export interface AccessClaims {
+  userId: string;
+  sessionId: string;
+}
+
+/**
+ * `sid` names the refresh family, so revoking a session can also disconnect the sockets that
+ * session opened (ADR 016).
+ */
+export async function signAccessToken(userId: string, sessionId: string): Promise<string> {
+  return new SignJWT({ sid: sessionId })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(userId)
     .setIssuedAt()
@@ -17,11 +27,14 @@ export async function signAccessToken(userId: string): Promise<string> {
     .sign(accessSecret);
 }
 
-export async function verifyAccessToken(token: string): Promise<string> {
+export async function verifyAccessToken(token: string): Promise<AccessClaims> {
   try {
     const { payload } = await jwtVerify(token, accessSecret, { algorithms: ['HS256'] });
-    if (!payload.sub) throw new Unauthorized('Invalid access token');
-    return payload.sub;
+    const { sub, sid } = payload;
+    if (!sub || typeof sid !== 'string' || sid === '') {
+      throw new Unauthorized('Invalid access token');
+    }
+    return { userId: sub, sessionId: sid };
   } catch (err) {
     if (err instanceof errors.JWTExpired) throw new Unauthorized('Access token expired');
     if (err instanceof errors.JOSEError) throw new Unauthorized('Invalid access token');

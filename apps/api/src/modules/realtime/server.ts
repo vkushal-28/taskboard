@@ -17,8 +17,12 @@ import { AppError, Unauthorized } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { findMemberRole } from '../boards/access.js';
 import { ACCESS_COOKIE, readCookie } from '../auth/cookies.js';
-import { verifyAccessToken } from '../auth/tokens.js';
-import { broadcastPresence as broadcastPresenceFor, type RealtimeServer } from './emitter.js';
+import { verifyAccessToken, type AccessClaims } from '../auth/tokens.js';
+import {
+  broadcastPresence as broadcastPresenceFor,
+  sessionRoom,
+  type RealtimeServer,
+} from './emitter.js';
 import { createMessageLimiter, SOCKET_MESSAGE_LIMIT, type MessageLimit } from './rate-limit.js';
 
 type RealtimeSocket =
@@ -54,8 +58,8 @@ export function createRealtimeServer(
 
   io.use((socket, next) => {
     authenticate(socket.request)
-      .then((userId) => {
-        socket.data = { userId, boards: {}, dragging: null };
+      .then(({ userId, sessionId }) => {
+        socket.data = { userId, sessionId, boards: {}, dragging: null };
         next();
       })
       .catch((err: unknown) => next(toConnectError(err)));
@@ -73,7 +77,9 @@ export function createRealtimeServer(
   }
 
   io.on('connection', (socket) => {
-    const { userId } = socket.data;
+    const { userId, sessionId } = socket.data;
+    // Lets disconnectSession() reach every socket this session opened (ADR 016).
+    void socket.join(sessionRoom(sessionId));
 
     // Drops messages over the limit. A dropped join gets no ack, so the client's join times
     // out and is retried on the next connect. Logged once per window, not per message.
@@ -167,8 +173,8 @@ export function createRealtimeServer(
   return io;
 }
 
-/** The user id from the handshake's access-token cookie, or Unauthorized. */
-async function authenticate(handshake: object): Promise<string> {
+/** The user and session from the handshake's access-token cookie, or Unauthorized. */
+async function authenticate(handshake: object): Promise<AccessClaims> {
   const token = readCookie(handshake, ACCESS_COOKIE);
   if (!token) throw new Unauthorized();
   return verifyAccessToken(token);

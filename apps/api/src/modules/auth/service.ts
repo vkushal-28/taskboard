@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { mongo } from 'mongoose';
 import { Conflict, Unauthorized } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { disconnectSession } from '../realtime/emitter.js';
 import { toPublicUser, UserModel } from '../users/model.js';
 import { RefreshTokenModel } from './model.js';
 import {
@@ -120,9 +121,11 @@ async function issueSession(
     tokenHash: hashRefreshToken(refreshToken),
     expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
   });
-  return { accessToken: await signAccessToken(userId), refreshToken };
+  return { accessToken: await signAccessToken(userId, familyId), refreshToken };
 }
 
 async function revokeFamily(familyId: string, at: Date): Promise<void> {
   await RefreshTokenModel.updateMany({ familyId, revokedAt: null }, { revokedAt: at });
+  // After the write, like every broadcast: the session is over, so are its live feeds.
+  disconnectSession(familyId);
 }
