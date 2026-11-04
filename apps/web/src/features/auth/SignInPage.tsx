@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, type LoginInput } from '@taskboard/shared';
 import { useForm } from 'react-hook-form';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { FormError } from '../../components/FormError';
 import { TextField } from '../../components/TextField';
 import { describeError } from '../../lib/api-error';
@@ -14,6 +14,8 @@ export const DEMO_CREDENTIALS: LoginInput = { email: 'priya@acme.dev', password:
 
 export function SignInPage() {
   const login = useLogin();
+  // Carries "where to go after signing in" (e.g. an invite link) over to the register page.
+  const location = useLocation();
   const {
     register,
     handleSubmit,
@@ -32,7 +34,11 @@ export function SignInPage() {
       subtitle={
         <>
           New here?{' '}
-          <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
+          <Link
+            to="/register"
+            state={location.state as unknown}
+            className="font-medium text-indigo-600 hover:text-indigo-500"
+          >
             Create an account
           </Link>
         </>
