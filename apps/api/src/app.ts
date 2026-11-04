@@ -14,6 +14,7 @@ import { createCommentsRouter } from './modules/comments/routes.js';
 import { createInvitesRouter } from './modules/invites/routes.js';
 import { createListsRouter } from './modules/lists/routes.js';
 import { createMembersRouter } from './modules/members/routes.js';
+import { createRealtimeRouter } from './modules/realtime/routes.js';
 
 export function createApp({ trustProxy = env.TRUST_PROXY }: { trustProxy?: number } = {}) {
   const app = express();
@@ -49,6 +50,7 @@ export function createApp({ trustProxy = env.TRUST_PROXY }: { trustProxy?: numbe
   app.use(createActivityRouter());
   app.use(createMembersRouter());
   app.use(createInvitesRouter());
+  app.use(createRealtimeRouter());
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -46,8 +46,7 @@ export function clearAuthCookies(res: Response): void {
   res.clearCookie(REFRESH_COOKIE, { ...base, path: REFRESH_COOKIE_PATH });
 }
 
-// cookie-parser types req.cookies as `any`; narrow to a string or nothing. Takes any request
-// object, so the Socket.IO handshake (a plain IncomingMessage after cookie-parser) can use it.
+// cookie-parser types req.cookies as `any`; narrow to a string or nothing.
 export function readCookie(req: object, name: string): string | undefined {
   const cookies: unknown = 'cookies' in req ? req.cookies : undefined;
   if (typeof cookies !== 'object' || cookies === null) return undefined;
