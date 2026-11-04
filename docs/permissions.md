@@ -27,12 +27,18 @@ Every board-scoped route needs a signed-in user first:
 | `POST /cards/:cardId/checklist`           | member    | ✓     | ✓      | 403    |
 | `PATCH /cards/:cardId/checklist/:itemId`  | member    | ✓     | ✓      | 403    |
 | `DELETE /cards/:cardId/checklist/:itemId` | member    | ✓     | ✓      | 403    |
+| `GET /cards/:cardId/comments`             | viewer    | ✓     | ✓      | ✓      |
+| `POST /cards/:cardId/comments`            | member    | ✓     | ✓      | 403    |
+| `GET /boards/:boardId/activity`           | viewer    | ✓     | ✓      | ✓      |
+| `GET /cards/:cardId/activity`             | viewer    | ✓     | ✓      | ✓      |
 
 `GET /boards` and `POST /boards` are not board-scoped: they only need `requireAuth`. `GET /boards` returns only boards the user is a member of.
 
 Archiving and restoring a card is `PATCH /cards/:cardId` with `{ archived }`, so it needs member like any other card edit.
 
 Checklist items are written one at a time through the `checklist` routes, so two people ticking different items at once never overwrite each other (ADR 013). `PATCH /cards/:cardId` still accepts a whole `checklist`, but the web app doesn't use it. A malformed `itemId` gets 404, like a missing one. Every card write also increments the card's `version`, and clients keep the copy with the highest one.
+
+Viewers can read comments and activity but can't comment. A new comment also bumps the card's `commentCount` and `version`, so it broadcasts both `comment:created` and `card:updated`. The feeds are newest first, and `?cursor=<id of the last item>` fetches the next page (ADR 014).
 
 A move whose target `listId` is on another board is rejected by the cards service with 409 (Slice 2.3), not by the middleware, because the target is in the body, not the url.
 

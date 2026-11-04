@@ -3,6 +3,7 @@ import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
 import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
 import { logActivity } from '../activity/service.js';
 import { CardModel } from '../cards/model.js';
+import { CommentModel } from '../comments/model.js';
 import { emitToBoard } from '../realtime/emitter.js';
 import { ListModel, toListDto } from './model.js';
 
@@ -91,8 +92,11 @@ export async function deleteList(boardId: string, listId: string, actorId: strin
   if (!list) throw new NotFound('List not found');
   // Cards first (ADR 006): a crash in between leaves a list that is still shown and can be
   // deleted again, not cards whose list is gone. boardId lets the query use the cards index.
+  const cards = await CardModel.find({ boardId, listId }, { _id: 1 }).lean();
   await CardModel.deleteMany({ boardId, listId });
   await ListModel.deleteOne({ _id: listId, boardId });
+  // Comments last: once their cards are gone, nothing can reach them.
+  await CommentModel.deleteMany({ boardId, cardId: { $in: cards.map((card) => card._id) } });
 
   await logActivity({
     boardId,

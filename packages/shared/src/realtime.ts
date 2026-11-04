@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { cardDtoSchema, listDtoSchema, objectIdSchema } from './boards.js';
+import { commentDtoSchema } from './comments.js';
 import type { Role } from './roles.js';
 
 /** The Socket.IO room for one board. Only the server joins sockets to it, after a membership check. */
@@ -36,6 +37,8 @@ export const boardEventSchemas = {
   'card:updated': z.object({ ...eventBase, card: cardDtoSchema }),
   'card:moved': z.object({ ...eventBase, card: cardDtoSchema, fromListId: z.string() }),
   'card:deleted': z.object({ ...eventBase, cardId: z.string(), listId: z.string() }),
+  // The card's new commentCount arrives separately, as card:updated.
+  'comment:created': z.object({ ...eventBase, comment: commentDtoSchema }),
   'list:created': z.object({ ...eventBase, list: listDtoSchema }),
   'list:updated': z.object({ ...eventBase, list: listDtoSchema }),
   'list:moved': z.object({ ...eventBase, list: listDtoSchema }),

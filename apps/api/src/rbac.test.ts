@@ -126,6 +126,30 @@ const ENDPOINTS: Endpoint[] = [
     successStatus: 200,
     request: ({ card, itemId }) => ({ path: `/cards/${card.id}/checklist/${itemId}` }),
   },
+  {
+    route: 'GET /cards/:cardId/comments',
+    minRole: 'viewer',
+    successStatus: 200,
+    request: ({ card }) => ({ path: `/cards/${card.id}/comments` }),
+  },
+  {
+    route: 'POST /cards/:cardId/comments',
+    minRole: 'member',
+    successStatus: 201,
+    request: ({ card }) => ({ path: `/cards/${card.id}/comments`, body: { body: 'Hi' } }),
+  },
+  {
+    route: 'GET /boards/:boardId/activity',
+    minRole: 'viewer',
+    successStatus: 200,
+    request: ({ board }) => ({ path: `/boards/${board.id}/activity` }),
+  },
+  {
+    route: 'GET /cards/:cardId/activity',
+    minRole: 'viewer',
+    successStatus: 200,
+    request: ({ card }) => ({ path: `/cards/${card.id}/activity` }),
+  },
 ];
 
 /** Routes that only need a signed-in user, not a board role. */

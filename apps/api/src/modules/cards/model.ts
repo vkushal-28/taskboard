@@ -26,6 +26,8 @@ export interface Card {
   archived: boolean;
   /** +1 on every write, inside the write's own update (ADR 013). */
   version: number;
+  /** Bumped by each new comment, in the same update as `version`. */
+  commentCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +59,7 @@ const cardSchema = new Schema<Card>(
     checklist: { type: [checklistItemSchema], default: [] },
     archived: { type: Boolean, default: false },
     version: { type: Number, default: 0 },
+    commentCount: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
@@ -68,9 +71,10 @@ cardSchema.index({ boardId: 1, listId: 1, position: 1 }, { unique: true });
 export const CardModel = model<Card>('Card', cardSchema);
 
 export function toCardDto(
-  card: Omit<Card, 'createdAt' | 'updatedAt' | 'version'> & {
+  card: Omit<Card, 'createdAt' | 'updatedAt' | 'version' | 'commentCount'> & {
     _id: Types.ObjectId;
     version?: number;
+    commentCount?: number;
   },
 ): CardDto {
   return {
@@ -91,5 +95,6 @@ export function toCardDto(
     archived: card.archived,
     // Cards saved before versions existed have no field; they start at 0.
     version: card.version ?? 0,
+    commentCount: card.commentCount ?? 0,
   };
 }

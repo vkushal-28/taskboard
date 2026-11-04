@@ -12,6 +12,7 @@ import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
 import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
 import { logActivity } from '../activity/service.js';
 import { areBoardMembers } from '../boards/access.js';
+import { CommentModel } from '../comments/model.js';
 import { ListModel } from '../lists/model.js';
 import { emitToBoard } from '../realtime/emitter.js';
 import { CardModel, toCardDto } from './model.js';
@@ -155,6 +156,8 @@ export async function moveCard(
 export async function deleteCard(boardId: string, cardId: string, actorId: string): Promise<void> {
   const card = await CardModel.findOneAndDelete({ _id: cardId, boardId }).lean();
   if (!card) throw new NotFound('Card not found');
+  // After the card (ADR 006): a crash in between leaves comments nothing can reach.
+  await CommentModel.deleteMany({ boardId, cardId });
 
   await logActivity({
     boardId,

@@ -18,6 +18,7 @@ const SENTENCES: Record<ActivityType, (item: ActivityItem) => string> = {
   'card.archived': (item) => `archived ${card(item)}`,
   'card.restored': (item) => `restored ${card(item)}`,
   'card.deleted': (item) => `deleted ${card(item)}`,
+  'comment.created': (item) => `commented on ${card(item)}`,
 };
 
 /** "moved "Login page" to "Done"". The actor's name is rendered separately. */

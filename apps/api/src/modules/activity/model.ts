@@ -24,8 +24,8 @@ const activitySchema = new Schema<Activity>(
   { timestamps: { createdAt: true, updatedAt: false }, minimize: false },
 );
 
-// The board and card feeds read newest first.
-activitySchema.index({ boardId: 1, createdAt: -1 });
-activitySchema.index({ cardId: 1, createdAt: -1 });
+// Every feed reads newest first by _id, which is also its cursor (ADR 014).
+activitySchema.index({ boardId: 1, _id: -1 });
+activitySchema.index({ cardId: 1, _id: -1 });
 
 export const ActivityModel = model<Activity>('Activity', activitySchema);

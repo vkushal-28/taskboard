@@ -234,6 +234,15 @@ describe('board events', () => {
       send: (f) => f.as('member').post(`/cards/${f.card.id}/checklist`).send({ text: 'Live step' }),
     },
     {
+      event: 'comment:created',
+      send: (f) => f.as('member').post(`/cards/${f.card.id}/comments`).send({ body: 'Live' }),
+    },
+    {
+      // A comment also changes the card's commentCount.
+      event: 'card:updated',
+      send: (f) => f.as('member').post(`/cards/${f.card.id}/comments`).send({ body: 'Counted' }),
+    },
+    {
       event: 'board:updated',
       send: (f) => f.as('owner').patch(`/boards/${f.board.id}`).send({ title: 'Renamed' }),
     },

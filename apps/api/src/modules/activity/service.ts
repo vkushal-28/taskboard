@@ -1,6 +1,8 @@
-import type { ActivityItem, ActivityType } from '@taskboard/shared';
-import { isValidObjectId } from 'mongoose';
+import type { ActivityItem, ActivityPage, ActivityType, CursorQuery } from '@taskboard/shared';
+import { isValidObjectId, type Types } from 'mongoose';
+import { NotFound } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { idsBefore, toPage } from '../../lib/pagination.js';
 import { BoardModel } from '../boards/model.js';
 import { CardModel } from '../cards/model.js';
 import { ListModel } from '../lists/model.js';
@@ -29,17 +31,59 @@ export async function logActivity(entry: ActivityEntry): Promise<void> {
 
 /** The newest activity across every board the user is a member of, with names resolved. */
 export async function listRecentActivity(userId: string, limit: number): Promise<ActivityItem[]> {
-  const boards = await BoardModel.find({ 'members.userId': userId }, { title: 1, color: 1 }).lean();
+  const boards = await BoardModel.find({ 'members.userId': userId }, BOARD_FIELDS).lean();
   if (boards.length === 0) return [];
 
-  // createdAt alone, with no _id tie-break, so Mongo can merge the per-board ranges of the
-  // { boardId, createdAt } index instead of sorting every matching row in memory.
+  // Sorted by _id alone, so Mongo can merge the per-board ranges of the { boardId, _id }
+  // index instead of sorting every matching row in memory.
   const rows = await ActivityModel.find({ boardId: { $in: boards.map((board) => board._id) } })
-    .sort({ createdAt: -1 })
+    .sort({ _id: -1 })
     .limit(limit)
     .lean();
+  return resolveActivity(rows, boards);
+}
 
-  // One query per collection for the whole page, not one per row.
+/** One page of a board's activity, newest first (ADR 014). */
+export async function listBoardActivity(
+  boardId: string,
+  query: CursorQuery,
+): Promise<ActivityPage> {
+  return activityPage(boardId, {}, query);
+}
+
+/** One page of a card's history, newest first. Includes its comments as `comment.created`. */
+export async function listCardActivity(
+  boardId: string,
+  cardId: string,
+  query: CursorQuery,
+): Promise<ActivityPage> {
+  return activityPage(boardId, { cardId }, query);
+}
+
+const BOARD_FIELDS = { title: 1, color: 1 } as const;
+
+async function activityPage(
+  boardId: string,
+  filter: { cardId?: string },
+  { cursor, limit }: CursorQuery,
+): Promise<ActivityPage> {
+  const [board, rows] = await Promise.all([
+    BoardModel.findById(boardId, BOARD_FIELDS).lean(),
+    ActivityModel.find({ boardId, ...filter, ...idsBefore(cursor) })
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .lean(),
+  ]);
+  if (!board) throw new NotFound('Board not found');
+  const { items, nextCursor } = toPage(rows, limit);
+  return { activity: await resolveActivity(items, [board]), nextCursor };
+}
+
+type ActivityRow = Activity & { _id: Types.ObjectId };
+type BoardRow = { _id: Types.ObjectId; title: string; color: string };
+
+/** Turns stored rows into display-ready items: names and titles resolved, one query per collection. */
+async function resolveActivity(rows: ActivityRow[], boards: BoardRow[]): Promise<ActivityItem[]> {
   const [users, cards, lists] = await Promise.all([
     UserModel.find(
       { _id: { $in: unique(rows.map((row) => row.actorId.toString())) } },

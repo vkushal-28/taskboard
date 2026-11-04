@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { nextCursorSchema } from './pagination.js';
 
 export const activityTypeSchema = z.enum([
   'board.created',
@@ -13,6 +14,7 @@ export const activityTypeSchema = z.enum([
   'card.archived',
   'card.restored',
   'card.deleted',
+  'comment.created',
 ]);
 
 export type ActivityType = z.infer<typeof activityTypeSchema>;
@@ -39,5 +41,12 @@ export const activityItemSchema = z.object({
 
 export const recentActivityResponseSchema = z.object({ activity: z.array(activityItemSchema) });
 
+// The board and card feeds: newest first, one page at a time (ADR 014).
+export const activityPageSchema = z.object({
+  activity: z.array(activityItemSchema),
+  nextCursor: nextCursorSchema,
+});
+
 export type RecentActivityQuery = z.infer<typeof recentActivityQuerySchema>;
 export type ActivityItem = z.infer<typeof activityItemSchema>;
+export type ActivityPage = z.infer<typeof activityPageSchema>;

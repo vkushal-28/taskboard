@@ -26,6 +26,7 @@ export function card(
     checklist: [],
     archived: false,
     version: 0,
+    commentCount: 0,
     ...overrides,
   } satisfies CardDto;
 }

@@ -84,6 +84,8 @@ export const cardDtoSchema = z.object({
    * card back (ADR 013).
    */
   version: z.number().int().nonnegative(),
+  /** Kept on the card, so the board view shows counts without loading comments. */
+  commentCount: z.number().int().nonnegative(),
 });
 
 export const listResponseSchema = z.object({ list: listDtoSchema });

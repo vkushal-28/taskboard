@@ -102,6 +102,8 @@ export function applyBoardEvent(detail: BoardDetail, event: BoardEvent): BoardDe
       const { title, color } = event.payload.board;
       return { ...detail, board: { ...detail.board, title, color } };
     }
+    // The card's new commentCount arrives as its own card:updated; comments aren't in the board.
+    case 'comment:created':
     case 'board:deleted':
       return detail;
   }
