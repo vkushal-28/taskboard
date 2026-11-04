@@ -15,7 +15,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^7.0.1",
-    "@tanstack/react-query": "^5.105.0",
+    "@tanstack/react-query": "^5.105.1",
     "@taskboard/shared": "workspace:*",
     "fractional-indexing": "^4.0.0",
     "react": "^18.3.1",
