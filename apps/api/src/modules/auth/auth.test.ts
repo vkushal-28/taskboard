@@ -25,6 +25,10 @@ beforeEach(() => {
   app = createApp();
 });
 
+function accessSecret(): Uint8Array {
+  return new TextEncoder().encode(process.env.JWT_ACCESS_SECRET);
+}
+
 async function refreshWith(refreshToken: string) {
   return request(app).post('/auth/refresh').set('Cookie', `${REFRESH_COOKIE}=${refreshToken}`);
 }
@@ -281,6 +285,18 @@ describe('POST /auth/logout', () => {
   it('succeeds without a cookie', async () => {
     expect((await request(app).post('/auth/logout')).status).toBe(204);
   });
+
+  it('succeeds with an unknown token and leaves real sessions alone', async () => {
+    const user = await createUser();
+    const token = await loginAndGetRefreshToken(user.email);
+
+    const res = await request(app)
+      .post('/auth/logout')
+      .set('Cookie', `${REFRESH_COOKIE}=not-a-real-token`);
+
+    expect(res.status).toBe(204);
+    expect((await refreshWith(token)).status).toBe(204);
+  });
 });
 
 describe('GET /auth/me', () => {
@@ -320,6 +336,42 @@ describe('GET /auth/me', () => {
     expect(res.status).toBe(401);
   });
 
+  it('returns 401 for a correctly signed token without a subject', async () => {
+    const noSubject = await new SignJWT()
+      .setProtectedHeader({ alg: 'HS256' })
+      .setExpirationTime('15m')
+      .sign(accessSecret());
+
+    const res = await request(app).get('/auth/me').set('Cookie', `${ACCESS_COOKIE}=${noSubject}`);
+
+    expect(res.status).toBe(401);
+    expect(errorOf(res).message).toBe('Invalid access token');
+  });
+
+  it('returns 401 for a token signed with our secret but another algorithm', async () => {
+    const user = await createUser();
+    const hs512 = await new SignJWT()
+      .setProtectedHeader({ alg: 'HS512' })
+      .setSubject(user.id)
+      .setExpirationTime('15m')
+      .sign(accessSecret());
+
+    const res = await request(app).get('/auth/me').set('Cookie', `${ACCESS_COOKIE}=${hs512}`);
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 for an unsigned token (alg none)', async () => {
+    const user = await createUser();
+    const part = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const exp = Math.floor(Date.now() / 1000) + 900;
+    const unsigned = `${part({ alg: 'none', typ: 'JWT' })}.${part({ sub: user.id, exp })}.`;
+
+    const res = await request(app).get('/auth/me').set('Cookie', `${ACCESS_COOKIE}=${unsigned}`);
+
+    expect(res.status).toBe(401);
+  });
+
   it('returns 401 for an expired token', async () => {
     const user = await createUser();
     const expired = await new SignJWT()
@@ -327,7 +379,7 @@ describe('GET /auth/me', () => {
       .setSubject(user.id)
       .setIssuedAt(Math.floor(Date.now() / 1000) - 3600)
       .setExpirationTime(Math.floor(Date.now() / 1000) - 60)
-      .sign(new TextEncoder().encode(process.env.JWT_ACCESS_SECRET));
+      .sign(accessSecret());
 
     const res = await request(app).get('/auth/me').set('Cookie', `${ACCESS_COOKIE}=${expired}`);
 

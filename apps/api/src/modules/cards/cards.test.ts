@@ -381,6 +381,18 @@ describe('PATCH /cards/:cardId/move', () => {
       expect((await CardModel.findById(a._id).lean())?.listId.toString()).toBe(a.listId.toString());
     });
 
+    it('the neighbours are in the wrong order', async () => {
+      const { done, a, c, cookie } = await boardWithCards();
+      const d = await createCard(done);
+      const res = await request(app)
+        .patch(`/cards/${d.id}/move`)
+        .set('Cookie', cookie)
+        .send({ listId: a.listId.toString(), beforeId: c.id, afterId: a.id });
+
+      expect(res.status).toBe(409);
+      expect(await cardOrder(done._id)).toEqual([d.id]);
+    });
+
     it('the target list does not exist', async () => {
       const { a, cookie } = await boardWithCards();
       const res = await request(app)
@@ -389,6 +401,17 @@ describe('PATCH /cards/:cardId/move', () => {
         .send({ listId: new Types.ObjectId().toString() });
       expect(res.status).toBe(409);
     });
+  });
+
+  it('accepts a drop back between its own neighbours and keeps the order', async () => {
+    const { todo, a, b, c, cookie } = await boardWithCards();
+    const res = await request(app)
+      .patch(`/cards/${b.id}/move`)
+      .set('Cookie', cookie)
+      .send({ listId: todo.id, beforeId: a.id, afterId: c.id });
+
+    expect(res.status).toBe(200);
+    expect(await cardOrder(todo._id)).toEqual([a.id, b.id, c.id]);
   });
 
   it('refuses to move an archived card', async () => {
