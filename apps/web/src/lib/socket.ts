@@ -30,7 +30,7 @@ export function getRealtimeSocket(): RealtimeSocket {
 }
 
 function createRealtimeSocket(): RealtimeSocket {
-  const socket = io(env.VITE_API_URL, {
+  const socket = io(env.socketUrl, {
     // Sends the httpOnly access cookie with the handshake (ADR 010).
     withCredentials: true,
     autoConnect: false,
