@@ -14,7 +14,8 @@
     "lint": "eslint . && prettier --check .",
     "prepare": "husky",
     "format": "prettier --write .",
-    "seed": "pnpm --filter @taskboard/api seed"
+    "seed": "pnpm --filter @taskboard/api seed",
+    "e2e": "pnpm --filter @taskboard/e2e e2e"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
