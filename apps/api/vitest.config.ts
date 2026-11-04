@@ -10,6 +10,9 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/server.ts', 'src/scripts/**'],
       reporter: ['text', 'json-summary', 'html'],
+      // Below today's numbers (98% lines, 88% branches) on purpose: a guard against untested
+      // code creeping in, not a target. CI fails the run if any of these drops.
+      thresholds: { lines: 90, statements: 90, functions: 90, branches: 80 },
     },
     env: {
       NODE_ENV: 'test',
