@@ -1,5 +1,6 @@
 import { io } from 'socket.io-client';
 import { env } from '../config/env';
+import { provideSocketTicket } from './socket-auth';
 
 const ACK_TIMEOUT_MS = 5_000;
 
@@ -31,8 +32,9 @@ export function getRealtimeSocket(): RealtimeSocket {
 
 function createRealtimeSocket(): RealtimeSocket {
   const socket = io(env.socketUrl, {
-    // Sends the httpOnly access cookie with the handshake (ADR 010).
-    withCredentials: true,
+    // The socket goes to the api's own address, where the browser has no login cookie, so it
+    // logs in with a single-use ticket fetched over REST before each attempt (ADR 018).
+    auth: provideSocketTicket,
     autoConnect: false,
     // WebSocket only: long polling spreads one session over many requests, which would need
     // sticky sessions as soon as the api runs on more than one instance.
