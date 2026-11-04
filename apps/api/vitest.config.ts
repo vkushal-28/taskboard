@@ -5,6 +5,12 @@ export default defineConfig({
   test: {
     globalSetup: ['test/global-setup.ts'],
     setupFiles: ['test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/server.ts', 'src/scripts/**'],
+      reporter: ['text', 'json-summary', 'html'],
+    },
     env: {
       NODE_ENV: 'test',
       MONGODB_URI: 'mongodb://localhost:27017/taskboard-test',
