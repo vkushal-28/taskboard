@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { boardDetail, card, list } from '../../test/board-fixtures';
 import {
   applyBoardEvent,
+  applyMembers,
   cardIdOf,
   cardWithHistory,
   describeRemoteMove,
@@ -113,6 +114,25 @@ describe('cardIdOf', () => {
     );
     expect(cardIdOf(event('card:deleted', { cardId: 'c2', listId: 'l1' }))).toBe('c2');
     expect(cardIdOf(event('list:deleted', { listId: 'l1' }))).toBeUndefined();
+  });
+});
+
+describe('applyMembers', () => {
+  it('replaces the members and reads my role from them', () => {
+    const members = [
+      { id: 'u1', name: 'Priya Sharma', role: 'viewer' as const },
+      { id: 'u2', name: 'Alex Kim', role: 'owner' as const },
+    ];
+    expect(applyMembers(boardDetail('owner'), members, 'u1')?.board).toMatchObject({
+      myRole: 'viewer',
+      members,
+    });
+  });
+
+  it('returns null when I am no longer a member', () => {
+    expect(
+      applyMembers(boardDetail(), [{ id: 'u2', name: 'Alex', role: 'owner' }], 'u1'),
+    ).toBeNull();
   });
 });
 

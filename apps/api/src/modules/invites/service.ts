@@ -21,6 +21,7 @@ const TTL_MS = INVITE_TTL_DAYS * 24 * 60 * 60 * 1000;
 interface IssuedInvite {
   invite: InviteDto;
   link: string;
+  emailed: boolean;
 }
 
 /** A fresh token for the link, and the hash that is stored instead of it. */
@@ -201,7 +202,7 @@ async function deliver(
   ]);
   const link = inviteLink(token);
   const who = inviter?.name ?? 'Someone';
-  await sendEmail({
+  const emailed = await sendEmail({
     to: invite.email,
     subject: `${who} invited you to "${board?.title ?? 'a board'}" on Taskboard`,
     text: [
@@ -215,5 +216,6 @@ async function deliver(
   return {
     invite: toInviteDto(invite, inviter ? { id: actorId, name: inviter.name } : null),
     link,
+    emailed,
   };
 }

@@ -1,6 +1,7 @@
 import type { BoardDetail } from '@taskboard/shared';
 import { Avatar } from '../../components/Avatar';
 import { RoleBadge } from '../../components/RoleBadge';
+import { ShareButton } from '../sharing/ShareDialog';
 import { useLiveStore } from './live-store';
 
 const MAX_AVATARS = 4;
@@ -54,7 +55,7 @@ export function BoardHeader({ board }: { board: BoardDetail['board'] }) {
           </span>
         </div>
         <SoonButton label="Filter" />
-        {board.myRole === 'owner' && <SoonButton label="Share" />}
+        {board.myRole === 'owner' && <ShareButton board={board} />}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import {
   type BoardDetail,
   type BoardEventName,
   type BoardEventPayload,
+  type BoardMemberDto,
   type CardDto,
 } from '@taskboard/shared';
 
@@ -102,10 +103,10 @@ export function applyBoardEvent(detail: BoardDetail, event: BoardEvent): BoardDe
       const { title, color } = event.payload.board;
       return { ...detail, board: { ...detail.board, title, color } };
     }
-    case 'members:updated':
-      return { ...detail, board: { ...detail.board, members: event.payload.members } };
-    // The card's new commentCount arrives as its own card:updated; comments aren't in the board.
+    // comment:created: the card's new commentCount arrives as its own card:updated.
+    // members:updated needs the current user's id, so the caller applies it (applyMembers).
     case 'comment:created':
+    case 'members:updated':
     case 'board:deleted':
       return detail;
   }
@@ -122,6 +123,20 @@ export function cardIdOf(event: BoardEvent): string | undefined {
     default:
       return undefined;
   }
+}
+
+/**
+ * The board with a new member list and the user's role read from it. `null` when the user is
+ * no longer listed, which means they were removed.
+ */
+export function applyMembers(
+  detail: BoardDetail,
+  members: BoardMemberDto[],
+  userId: string,
+): BoardDetail | null {
+  const me = members.find((member) => member.id === userId);
+  if (!me) return null;
+  return { ...detail, board: { ...detail.board, members, myRole: me.role } };
 }
 
 /** The card whose history an event adds to, so an open History tab can refetch. */

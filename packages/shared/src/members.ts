@@ -26,9 +26,14 @@ export const inviteListResponseSchema = z.object({ invites: z.array(inviteDtoSch
 
 /**
  * Create and resend return the link once, so the owner can copy it when email can't reach the
- * invitee. Only the invited email can accept it (ADR 015).
+ * invitee. Only the invited email can accept it (ADR 015). `emailed` says whether an email
+ * went out too.
  */
-export const inviteWithLinkResponseSchema = z.object({ invite: inviteDtoSchema, link: z.url() });
+export const inviteWithLinkResponseSchema = z.object({
+  invite: inviteDtoSchema,
+  link: z.url(),
+  emailed: z.boolean(),
+});
 
 /** What the accept page shows before the user accepts. */
 export const invitePreviewSchema = z.object({

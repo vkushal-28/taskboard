@@ -68,12 +68,15 @@ describe('POST /boards/:boardId/invites', () => {
       invite: dto,
       link,
       token,
+      emailed,
     } = await invite(s, {
       email: '  Sam@Example.com ',
       role: 'viewer',
     });
 
     expect(link).toBe(`http://localhost:5173/invite/${token}`);
+    // Tests run without RESEND_API_KEY, so no email goes out.
+    expect(emailed).toBe(false);
     expect(dto).toMatchObject({
       email: 'sam@example.com',
       role: 'viewer',
