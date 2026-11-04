@@ -5,6 +5,9 @@ export default defineConfig({
   test: {
     globalSetup: ['test/global-setup.ts'],
     setupFiles: ['test/setup.ts'],
+    // Each file's beforeAll connects and builds every model's indexes. On a cold CI runner with
+    // coverage on, the first files can take longer than the 10 s default.
+    hookTimeout: 30_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

@@ -15,9 +15,11 @@ permissions:
 env:
   HUSKY: 0
 
+# Pinned: ubuntu-latest is Ubuntu 26.04, whose kernel (6.19+) the mongo:8 image refuses to
+# start on (SERVER-121912), and where Chromium's system packages take minutes to install.
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -48,7 +50,7 @@ jobs:
       - run: pnpm build
 
   audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -61,7 +63,7 @@ jobs:
       - run: pnpm audit --prod --audit-level=high
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       mongo:
