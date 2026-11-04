@@ -172,7 +172,17 @@ export function useBoardSocket(boardId: string): void {
       void join();
     };
     // Presence and drag cues from before the drop are stale; the rejoin sends fresh ones.
-    const onDisconnect = () => resetLive(boardId);
+    // Socket.IO reconnects by itself after a dropped connection, but not after the server
+    // closed it. The server only does that when this session was revoked (ADR 016): signed
+    // out in another tab, or a stolen refresh token was detected. Refreshing finds out which:
+    // it fails and signs this tab out, or it succeeds and the socket reconnects.
+    const onDisconnect = (reason: unknown) => {
+      resetLive(boardId);
+      if (reason !== 'io server disconnect') return;
+      void api.recoverSession().then((ok) => {
+        if (ok && !disposed) socket.connect();
+      });
+    };
 
     const onPresence = (payload: unknown) => {
       const parsed = presenceUpdateSchema.safeParse(payload);

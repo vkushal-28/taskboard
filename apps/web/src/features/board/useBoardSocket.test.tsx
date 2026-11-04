@@ -252,6 +252,44 @@ describe('useBoardSocket', () => {
   });
 });
 
+describe('when the server closes the connection (session revoked)', () => {
+  it('signs the user out when the session is gone', async () => {
+    renderSocketHook({ 'POST /auth/refresh': () => errorResponse(401, 'UNAUTHORIZED') });
+    await waitFor(() => expect(fakeSocket.emitted).toHaveLength(1));
+
+    act(() => fakeSocket.serverDisconnect());
+
+    await waitFor(() => expect(queryClient.getQueryData(authKeys.me)).toBeNull());
+    expect(fakeSocket.connected).toBe(false);
+  });
+
+  it('reconnects and rejoins when the session can still be refreshed', async () => {
+    renderSocketHook({ 'POST /auth/refresh': () => json(200, { user: priya }) });
+    await waitFor(() => expect(fakeSocket.emitted).toHaveLength(1));
+
+    act(() => fakeSocket.serverDisconnect());
+
+    await waitFor(() => expect(fakeSocket.emitted).toHaveLength(2));
+    expect(fakeSocket.connected).toBe(true);
+  });
+
+  it('does not refresh after an ordinary dropped connection', async () => {
+    let refreshes = 0;
+    renderSocketHook({
+      'POST /auth/refresh': () => {
+        refreshes += 1;
+        return json(200, { user: priya });
+      },
+    });
+    await waitFor(() => expect(fakeSocket.emitted).toHaveLength(1));
+
+    act(() => fakeSocket.reconnect());
+
+    await waitFor(() => expect(fakeSocket.emitted).toHaveLength(2));
+    expect(refreshes).toBe(0);
+  });
+});
+
 describe('board:deleted', () => {
   it('tells the user and takes them back to their boards', async () => {
     stubApi({
