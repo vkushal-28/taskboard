@@ -21,7 +21,10 @@ export default defineConfig({
   globalSetup: './global-setup.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
+  // The retry is for the trace of a flaky failure, not to hide it: a test that only passes
+  // on retry still fails the run.
   retries: process.env.CI ? 1 : 0,
+  failOnFlakyTests: !!process.env.CI,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: WEB_URL,
