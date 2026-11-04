@@ -29,3 +29,17 @@ describe('GET /health', () => {
     expect(res.body).toEqual({ status: 'degraded', db: 'disconnected' });
   });
 });
+
+describe('caching', () => {
+  // Behind Vercel's proxy, a cacheable answer could be served to another user (ADR 018).
+  it.each([
+    ['a success', '/health'],
+    ['an error', '/no-such-route'],
+  ])('forbids caching %s', async (_name, path) => {
+    vi.mocked(getDbStatus).mockReturnValue('connected');
+
+    const res = await request(createApp()).get(path);
+
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+});

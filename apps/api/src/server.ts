@@ -9,7 +9,13 @@ import { createRealtimeServer } from './modules/realtime/server.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-await connectDb(env.MONGODB_URI);
+try {
+  await connectDb(env.MONGODB_URI);
+} catch (err) {
+  // Logs the error, never env.MONGODB_URI: the URI holds the database password.
+  logger.fatal({ err }, 'could not connect to mongodb');
+  process.exit(1);
+}
 
 // Socket.IO attaches before the server listens, so no upgrade request reaches Express first.
 const server = createServer(createApp());

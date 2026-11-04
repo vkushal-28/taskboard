@@ -5,20 +5,26 @@ import { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_MS } from './tokens.js';
 export const ACCESS_COOKIE = 'tb_access';
 export const REFRESH_COOKIE = 'tb_refresh';
 
-// The refresh cookie is only sent to /auth routes, so it never travels with ordinary API calls.
-const REFRESH_COOKIE_PATH = '/auth';
+/**
+ * The refresh cookie is only sent to the auth routes, so it never travels with ordinary API
+ * calls. Behind the Vercel proxy the browser sees those routes under `/api/auth` (ADR 018).
+ */
+export function refreshCookiePath(apiPublicPath: string): string {
+  return `${apiPublicPath}/auth`;
+}
 
-// In production the web (Vercel) and api (Render) are on different sites, which needs
-// SameSite=None + Secure for cookies to be sent at all (ADR 004). Browsers reject SameSite=None
-// without Secure, so insecure cookies fall back to Lax, which works when web and api share a
-// site (localhost in dev and in the Docker stack).
+// The browser always talks to the api on the web app's own site: localhost in development and
+// in the Docker stack, the Vercel proxy in production (ADR 018). So the cookies are
+// first-party and can stay SameSite=Lax: a page on another site never gets them sent along.
 export function cookieFlags(secure: boolean): CookieOptions {
-  return { httpOnly: true, secure, sameSite: secure ? 'none' : 'lax' };
+  return { httpOnly: true, secure, sameSite: 'lax' };
 }
 
 function baseCookieOptions(): CookieOptions {
   return cookieFlags(env.COOKIE_SECURE);
 }
+
+const REFRESH_COOKIE_PATH = refreshCookiePath(env.API_PUBLIC_PATH);
 
 export function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
   const base = baseCookieOptions();

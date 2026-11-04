@@ -15,11 +15,21 @@ import { createInvitesRouter } from './modules/invites/routes.js';
 import { createListsRouter } from './modules/lists/routes.js';
 import { createMembersRouter } from './modules/members/routes.js';
 
-export function createApp() {
+export function createApp({ trustProxy = env.TRUST_PROXY }: { trustProxy?: number } = {}) {
   const app = express();
   const clientOrigin = new URL(env.CLIENT_URL).origin;
 
+  // Behind Render (and the Vercel proxy) every request comes from a proxy. Trusting exactly
+  // that many hops makes req.ip the client's address, which the rate limits key on.
+  app.set('trust proxy', trustProxy);
+
   app.use(helmet());
+  // Every response is per-user or live data. In production the api is reached through
+  // Vercel's proxy, which caches what an origin allows (ADR 018); no-store forbids that.
+  app.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
   app.use(cors({ origin: clientOrigin, credentials: true }));
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());

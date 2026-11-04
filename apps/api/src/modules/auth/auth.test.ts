@@ -176,6 +176,34 @@ describe('POST /auth/login', () => {
     expect(refresh).toMatch(/Path=\/auth/);
   });
 
+  it('counts each client separately behind a trusted proxy', async () => {
+    // One proxy hop, as on Render: req.ip comes from X-Forwarded-For.
+    const proxied = createApp({ trustProxy: 1 });
+    const attempt = (ip: string) =>
+      request(proxied)
+        .post('/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: 'nobody@example.com', password: 'x' });
+
+    for (let i = 0; i < 10; i++) expect((await attempt('203.0.113.1')).status).toBe(401);
+
+    expect((await attempt('203.0.113.1')).status).toBe(429);
+    expect((await attempt('203.0.113.2')).status).toBe(401);
+  });
+
+  it('ignores X-Forwarded-For when no proxy is trusted', async () => {
+    const attempt = (ip: string) =>
+      request(app)
+        .post('/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: 'nobody@example.com', password: 'x' });
+
+    for (let i = 0; i < 10; i++) expect((await attempt(`203.0.113.${i}`)).status).toBe(401);
+
+    // A client faking a new address each time still shares one counter.
+    expect((await attempt('203.0.113.99')).status).toBe(429);
+  });
+
   it('rate limits after 10 attempts in the window', async () => {
     const attempt = () =>
       request(app).post('/auth/login').send({ email: 'nobody@example.com', password: 'x' });
