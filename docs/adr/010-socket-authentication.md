@@ -29,7 +29,7 @@ Two things are different for sockets:
 ## Consequences
 
 - Good: one auth mechanism (the cookie) for REST and sockets, no token in JavaScript, and cross-site hijacking blocked at the handshake. Events only reach sockets that passed a membership check.
-- Bad / tradeoffs: a user whose session ends (logout, refresh reuse detected) keeps receiving events on an already-open socket until it disconnects. They only receive data from boards they were a member of when they joined, which they could already read.
+- Bad / tradeoffs: a user whose session ends (logout, refresh reuse detected) keeps receiving events on an already-open socket until it disconnects. They only receive data from boards they were a member of when they joined, which they could already read. **Superseded by ADR 016:** revoking a session now disconnects its sockets.
 - Follow-ups:
   - **Phase 5 (member removal and role changes):** remove the user's sockets from `board:<id>` when they are removed from a board (`io.in(room).fetchSockets()` and filter by `socket.data.userId`). Logout can do the same for all of a user's sockets.
   - Revisit expiry-based disconnects if sockets ever accept writes, or if events start carrying data a user could not already read.
