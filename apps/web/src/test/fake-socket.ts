@@ -53,6 +53,12 @@ export class FakeSocket implements RealtimeSocket {
     this.connect();
   }
 
+  /** The server closed the connection, e.g. after the session was revoked (ADR 016). */
+  serverDisconnect(): void {
+    this.connected = false;
+    this.fire('disconnect', 'io server disconnect');
+  }
+
   /** The server refused the handshake with this `data.code`. */
   refuse(code: string): void {
     this.connected = false;

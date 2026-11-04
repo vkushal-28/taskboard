@@ -46,7 +46,9 @@ export async function changeRole(
       ...(role === 'owner' ? {} : anotherOwnerThan(userId)),
     },
     { $set: { 'members.$[target].role': role } },
-    { arrayFilters: [{ 'target.userId': userId }] },
+    // Without `timestamps: false` Mongoose also sets updatedAt, so modifiedCount would be 1
+    // even when the role is unchanged and the no-op check below would never fire.
+    { arrayFilters: [{ 'target.userId': userId }], timestamps: false },
   );
   if (result.matchedCount === 0) await explainNoMatch(boardId, userId);
   if (result.modifiedCount === 0) return listMembers(boardId);

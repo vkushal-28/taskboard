@@ -15,6 +15,8 @@ import { logger } from '../../lib/logger.js';
 // Plain objects, not Maps: a multi-instance adapter serializes socket.data (ADR 012).
 export interface SocketData {
   userId: string;
+  /** The refresh family (session) whose access token opened this socket. */
+  sessionId: string;
   /** The role each joined board granted at join time. */
   boards: Partial<Record<string, Role>>;
   /** The card this socket is dragging, so a disconnect can clear the "moving this" cue. */
@@ -57,6 +59,26 @@ export function emitToBoard<E extends BoardEventName>(
     room.emit(event, payload);
   } catch (err) {
     logger.error({ err, boardId, event }, 'failed to emit board event');
+  }
+}
+
+/** The room holding every socket one session opened. Server-side only; clients never see it. */
+export function sessionRoom(sessionId: string): string {
+  return `session:${sessionId}`;
+}
+
+/**
+ * Disconnects every socket a session opened, after the session was revoked (logout, refresh
+ * reuse). Without it an open socket keeps receiving events after its session ended (ADR 016).
+ * `disconnectSockets` goes through the adapter, so it also reaches other instances. Never
+ * throws, like emitToBoard.
+ */
+export function disconnectSession(sessionId: string): void {
+  if (!io) return;
+  try {
+    io.in(sessionRoom(sessionId)).disconnectSockets(true);
+  } catch (err) {
+    logger.error({ err }, 'failed to disconnect session sockets');
   }
 }
 

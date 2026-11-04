@@ -6,7 +6,7 @@ import { verifyAccessToken } from '../modules/auth/tokens.js';
 export const requireAuth: RequestHandler = async (req, _res, next) => {
   const token = readCookie(req, ACCESS_COOKIE);
   if (!token) throw new Unauthorized();
-  req.userId = await verifyAccessToken(token);
+  req.userId = (await verifyAccessToken(token)).userId;
   next();
 };
 

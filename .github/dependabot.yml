@@ -1,0 +1,39 @@
+version: 2
+updates:
+  # The npm ecosystem also covers pnpm workspaces and pnpm-lock.yaml.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Pinned on purpose: typescript-eslint doesn't support TS 7 yet (ADR 002).
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # Types follow the Node 22 runtime target, not the newest Node.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
+      # react-router 8 needs React 19 (ADR 008); upgrade the three together, by hand.
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+      - dependency-name: react-router
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ['*']

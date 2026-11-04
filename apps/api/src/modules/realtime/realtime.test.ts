@@ -2,6 +2,7 @@ import { createServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
   BOARD_JOIN,
+  BOARD_LEAVE,
   CARD_DRAG,
   CARD_DRAGGING,
   cardDraggingSchema,
@@ -13,17 +14,26 @@ import {
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from '@taskboard/shared';
+import { SignJWT } from 'jose';
 import { io as connect, type Socket } from 'socket.io-client';
 import request from 'supertest';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   accessCookieFor,
+  cookieValue,
   createBoardWithRoles,
   createCard,
   createList,
   createUser,
+  DEFAULT_PASSWORD,
+  getCookie,
 } from '../../../test/factories.js';
 import { createApp } from '../../app.js';
+import { ACCESS_COOKIE, REFRESH_COOKIE } from '../auth/cookies.js';
+import { RefreshTokenModel } from '../auth/model.js';
+import { REFRESH_REUSE_GRACE_MS } from '../auth/service.js';
+import { hashRefreshToken } from '../auth/tokens.js';
+import { BoardModel } from '../boards/model.js';
 import { emitToBoard, setRealtimeServer, type RealtimeServer } from './emitter.js';
 import { createRealtimeServer } from './server.js';
 
@@ -47,6 +57,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   openSockets.splice(0).forEach((socket) => socket.disconnect());
 });
 
@@ -124,6 +135,139 @@ describe('socket handshake', () => {
   it('accepts a valid cookie from the web app origin', async () => {
     await connectedAs(await createUser());
   });
+
+  it('rejects an access token without a session id', async () => {
+    const user = await createUser();
+    const noSession = await new SignJWT()
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(user.id)
+      .setExpirationTime('15m')
+      .sign(new TextEncoder().encode(process.env.JWT_ACCESS_SECRET));
+    const socket = open({ cookie: `${ACCESS_COOKIE}=${noSession}`, origin: CLIENT_ORIGIN });
+    expect(await connectResult(socket)).toEqual({ code: 'UNAUTHORIZED' });
+  });
+});
+
+describe('session end', () => {
+  /** Logs in through REST, so the tokens belong to a real refresh family. */
+  async function signIn(email: string) {
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email, password: DEFAULT_PASSWORD })
+      .expect(200);
+    const access = cookieValue(getCookie(res, ACCESS_COOKIE));
+    const refresh = cookieValue(getCookie(res, REFRESH_COOKIE));
+    if (!access || !refresh) throw new Error('login did not set both cookies');
+    const cookie = `${ACCESS_COOKIE}=${access}`;
+    const socket = open({ cookie, origin: CLIENT_ORIGIN });
+    expect(await connectResult(socket)).toEqual({ connected: true });
+    return { socket, refresh, cookie };
+  }
+
+  const logout = (refresh: string) =>
+    request(app).post('/auth/logout').set('Cookie', `${REFRESH_COOKIE}=${refresh}`).expect(204);
+
+  function serverDisconnect(socket: ClientSocket): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('not disconnected')), EVENT_TIMEOUT_MS);
+      socket.once('disconnect', (reason) => {
+        clearTimeout(timer);
+        resolve(reason);
+      });
+    });
+  }
+
+  it("disconnects the session's sockets on logout, not the user's other sessions", async () => {
+    const user = await createUser();
+    const laptop = await signIn(user.email);
+    const phone = await signIn(user.email);
+
+    const closed = serverDisconnect(laptop.socket);
+    await request(app)
+      .post('/auth/logout')
+      .set('Cookie', `${REFRESH_COOKIE}=${laptop.refresh}`)
+      .expect(204);
+
+    expect(await closed).toBe('io server disconnect');
+    await roundTrip(phone.socket);
+    expect(phone.socket.connected).toBe(true);
+  });
+
+  it("closes a new socket opened with a revoked session's still-valid access token", async () => {
+    const { board, member } = await createBoardWithRoles();
+    const session = await signIn(member.email);
+    const closedFirst = serverDisconnect(session.socket);
+    await logout(session.refresh);
+    await closedFirst;
+
+    // The access token is still inside its 15 minutes, so the handshake itself passes.
+    const again = open({ cookie: session.cookie, origin: CLIENT_ORIGIN });
+    const closed = serverDisconnect(again);
+    expect(await connectResult(again)).toEqual({ connected: true });
+    again.emit(BOARD_JOIN, { boardId: board.id }, () => undefined);
+
+    expect(await closed).toBe('io server disconnect');
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('closes a socket whose session is revoked while its session check is reading', async () => {
+    const user = await createUser();
+    const session = await signIn(user.email);
+    const exists = RefreshTokenModel.exists.bind(RefreshTokenModel);
+    vi.spyOn(RefreshTokenModel, 'exists').mockImplementationOnce(
+      (...args: Parameters<typeof exists>) => {
+        const query = exists(...args);
+        const exec = query.exec.bind(query);
+        query.exec = async () => {
+          const result = await exec();
+          await logout(session.refresh);
+          return result;
+        };
+        return query;
+      },
+    );
+
+    const racing = open({ cookie: session.cookie, origin: CLIENT_ORIGIN });
+    const closed = serverDisconnect(racing);
+
+    expect(await closed).toBe('io server disconnect');
+  });
+
+  it('keeps a socket whose session rotated: the family is still active', async () => {
+    const user = await createUser();
+    const session = await signIn(user.email);
+    await request(app)
+      .post('/auth/refresh')
+      .set('Cookie', `${REFRESH_COOKIE}=${session.refresh}`)
+      .expect(204);
+
+    const later = open({ cookie: session.cookie, origin: CLIENT_ORIGIN });
+    expect(await connectResult(later)).toEqual({ connected: true });
+    await roundTrip(later);
+    expect(later.connected).toBe(true);
+  });
+
+  it('disconnects every socket of a session revoked for refresh token reuse', async () => {
+    const user = await createUser();
+    const victim = await signIn(user.email);
+    // The victim rotates; the old token, replayed after the grace window, is theft.
+    await request(app)
+      .post('/auth/refresh')
+      .set('Cookie', `${REFRESH_COOKIE}=${victim.refresh}`)
+      .expect(204);
+    await RefreshTokenModel.updateOne(
+      { tokenHash: hashRefreshToken(victim.refresh) },
+      { revokedAt: new Date(Date.now() - REFRESH_REUSE_GRACE_MS - 1_000) },
+    );
+
+    const closed = serverDisconnect(victim.socket);
+    await request(app)
+      .post('/auth/refresh')
+      .set('Cookie', `${REFRESH_COOKIE}=${victim.refresh}`)
+      .expect(401);
+
+    expect(await closed).toBe('io server disconnect');
+  });
 });
 
 describe('board:join', () => {
@@ -145,7 +289,141 @@ describe('board:join', () => {
     const ack = await join(socket, { boardId: 'nope' });
     expect(ack).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
   });
+
+  it('answers INTERNAL_ERROR and stays out of the room when the role lookup fails', async () => {
+    const { board, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    vi.spyOn(BoardModel, 'findOne').mockImplementationOnce(() => {
+      throw new Error('database unavailable');
+    });
+
+    const ack = await join(socket, { boardId: board.id });
+
+    expect(ack).toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } });
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('leaves the room again when the role check after joining fails', async () => {
+    const { board, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    const findOne = BoardModel.findOne.bind(BoardModel);
+    let lookups = 0;
+    vi.spyOn(BoardModel, 'findOne').mockImplementation((...args: Parameters<typeof findOne>) => {
+      const filter: unknown = args[0];
+      const isLookup =
+        typeof filter === 'object' &&
+        filter !== null &&
+        'members.userId' in filter &&
+        String(filter['members.userId']) === member.id;
+      // The second lookup is the one after socket.join.
+      if (isLookup && ++lookups === 2) throw new Error('database unavailable');
+      return findOne(...args);
+    });
+
+    const ack = await join(socket, { boardId: board.id });
+
+    expect(lookups).toBe(2);
+    expect(ack).toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } });
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('ignores a join sent without an ack callback', async () => {
+    const { board, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+
+    socket.emit(BOARD_JOIN, { boardId: board.id }, undefined as never);
+    await roundTrip(socket);
+
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('survives malformed leave and drag messages', async () => {
+    const { board, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    await join(socket, { boardId: board.id });
+
+    // Malformed on purpose: a bad board id, and a drag without a card id.
+    socket.emit(BOARD_LEAVE, { boardId: 'nope' });
+    socket.emit(CARD_DRAG, { boardId: board.id } as never);
+    await roundTrip(socket);
+
+    expect(socket.connected).toBe(true);
+    expect(await userIdsInRoom(board.id)).toEqual([member.id]);
+  });
 });
+
+describe('board:join racing a membership change', () => {
+  /**
+   * Runs `change` right after the join's role lookup for `userId` has read the board, before
+   * the handler continues. That is the gap between checking membership and joining the room.
+   */
+  function changeDuringRoleLookup(userId: string, change: () => Promise<unknown>): () => boolean {
+    const findOne = BoardModel.findOne.bind(BoardModel);
+    let fired = false;
+    vi.spyOn(BoardModel, 'findOne').mockImplementation((...args: Parameters<typeof findOne>) => {
+      const query = findOne(...args);
+      const filter: unknown = args[0];
+      const isLookup =
+        typeof filter === 'object' &&
+        filter !== null &&
+        'members.userId' in filter &&
+        String(filter['members.userId']) === userId;
+      if (fired || !isLookup) return query;
+      fired = true;
+      const exec = query.exec.bind(query);
+      query.exec = async () => {
+        const result = await exec();
+        await change();
+        return result;
+      };
+      return query;
+    });
+    return () => fired;
+  }
+
+  it('keeps out a member who is removed while their join checks the role', async () => {
+    const { board, owner, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    const ownerCookie = await accessCookieFor(owner);
+    const fired = changeDuringRoleLookup(member.id, () =>
+      request(app)
+        .delete(`/boards/${board.id}/members/${member.id}`)
+        .set('Cookie', ownerCookie)
+        .expect(200),
+    );
+
+    const ack = await join(socket, { boardId: board.id });
+
+    expect(fired()).toBe(true);
+    expect(ack).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('stores the new role of a member who is demoted while their join checks the role', async () => {
+    const { board, owner, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    const ownerCookie = await accessCookieFor(owner);
+    const fired = changeDuringRoleLookup(member.id, () =>
+      request(app)
+        .patch(`/boards/${board.id}/members/${member.id}`)
+        .set('Cookie', ownerCookie)
+        .send({ role: 'viewer' })
+        .expect(200),
+    );
+
+    const ack = await join(socket, { boardId: board.id });
+
+    expect(fired()).toBe(true);
+    expect(ack).toEqual({ ok: true, role: 'viewer' });
+    const [joined] = await io.in(`board:${board.id}`).fetchSockets();
+    expect(joined?.data.boards[board.id]).toBe('viewer');
+  });
+});
+
+async function userIdsInRoom(boardId: string): Promise<string[]> {
+  const sockets = await io.in(`board:${boardId}`).fetchSockets();
+  return sockets.map((socket) => socket.data.userId);
+}
 
 describe('board events', () => {
   it('sends a REST write to sockets in that board room only', async () => {

@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { mongo } from 'mongoose';
 import { Conflict, Unauthorized } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { disconnectSession } from '../realtime/emitter.js';
 import { toPublicUser, UserModel } from '../users/model.js';
 import { RefreshTokenModel } from './model.js';
 import {
@@ -103,6 +104,19 @@ export async function logout(refreshToken: string | undefined): Promise<void> {
   if (existing) await revokeFamily(existing.familyId, new Date());
 }
 
+/**
+ * True while the session (refresh family) still holds a token that is neither revoked nor
+ * expired. Logout and reuse detection revoke every token, so the family stops being active.
+ */
+export async function isSessionActive(familyId: string): Promise<boolean> {
+  const active = await RefreshTokenModel.exists({
+    familyId,
+    revokedAt: null,
+    expiresAt: { $gt: new Date() },
+  });
+  return active !== null;
+}
+
 export async function getCurrentUser(userId: string): Promise<PublicUser> {
   const user = await UserModel.findById(userId);
   if (!user) throw new Unauthorized('User no longer exists');
@@ -120,9 +134,11 @@ async function issueSession(
     tokenHash: hashRefreshToken(refreshToken),
     expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
   });
-  return { accessToken: await signAccessToken(userId), refreshToken };
+  return { accessToken: await signAccessToken(userId, familyId), refreshToken };
 }
 
 async function revokeFamily(familyId: string, at: Date): Promise<void> {
   await RefreshTokenModel.updateMany({ familyId, revokedAt: null }, { revokedAt: at });
+  // After the write, like every broadcast: the session is over, so are its live feeds.
+  disconnectSession(familyId);
 }

@@ -1,4 +1,4 @@
-import { SignJWT } from 'jose';
+import { decodeJwt, SignJWT } from 'jose';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -24,6 +24,10 @@ let app: ReturnType<typeof createApp>;
 beforeEach(() => {
   app = createApp();
 });
+
+function accessSecret(): Uint8Array {
+  return new TextEncoder().encode(process.env.JWT_ACCESS_SECRET);
+}
 
 async function refreshWith(refreshToken: string) {
   return request(app).post('/auth/refresh').set('Cookie', `${REFRESH_COOKIE}=${refreshToken}`);
@@ -281,6 +285,18 @@ describe('POST /auth/logout', () => {
   it('succeeds without a cookie', async () => {
     expect((await request(app).post('/auth/logout')).status).toBe(204);
   });
+
+  it('succeeds with an unknown token and leaves real sessions alone', async () => {
+    const user = await createUser();
+    const token = await loginAndGetRefreshToken(user.email);
+
+    const res = await request(app)
+      .post('/auth/logout')
+      .set('Cookie', `${REFRESH_COOKIE}=not-a-real-token`);
+
+    expect(res.status).toBe(204);
+    expect((await refreshWith(token)).status).toBe(204);
+  });
 });
 
 describe('GET /auth/me', () => {
@@ -309,7 +325,7 @@ describe('GET /auth/me', () => {
 
   it('returns 401 for a token signed with another secret', async () => {
     const user = await createUser();
-    const forged = await new SignJWT()
+    const forged = await new SignJWT({ sid: 'some-session' })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(user.id)
       .setExpirationTime('15m')
@@ -320,14 +336,77 @@ describe('GET /auth/me', () => {
     expect(res.status).toBe(401);
   });
 
+  it('issues access tokens that name their refresh family as `sid`', async () => {
+    const user = await createUser();
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: user.email, password: DEFAULT_PASSWORD });
+    const access = cookieValue(getCookie(res, ACCESS_COOKIE)) ?? '';
+    const refresh = cookieValue(getCookie(res, REFRESH_COOKIE)) ?? '';
+
+    const stored = await RefreshTokenModel.findOne({ tokenHash: hashRefreshToken(refresh) });
+    expect(stored).not.toBeNull();
+    expect(decodeJwt(access).sid).toBe(stored?.familyId);
+  });
+
+  it('returns 401 for a correctly signed token without a session id', async () => {
+    const user = await createUser();
+    const noSession = await new SignJWT()
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(user.id)
+      .setExpirationTime('15m')
+      .sign(accessSecret());
+
+    const res = await request(app).get('/auth/me').set('Cookie', `${ACCESS_COOKIE}=${noSession}`);
+
+    expect(res.status).toBe(401);
+    expect(errorOf(res).message).toBe('Invalid access token');
+  });
+
+  it('returns 401 for a correctly signed token without a subject', async () => {
+    const noSubject = await new SignJWT({ sid: 'some-session' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setExpirationTime('15m')
+      .sign(accessSecret());
+
+    const res = await request(app).get('/auth/me').set('Cookie', `${ACCESS_COOKIE}=${noSubject}`);
+
+    expect(res.status).toBe(401);
+    expect(errorOf(res).message).toBe('Invalid access token');
+  });
+
+  it('returns 401 for a token signed with our secret but another algorithm', async () => {
+    const user = await createUser();
+    const hs512 = await new SignJWT({ sid: 'some-session' })
+      .setProtectedHeader({ alg: 'HS512' })
+      .setSubject(user.id)
+      .setExpirationTime('15m')
+      .sign(accessSecret());
+
+    const res = await request(app).get('/auth/me').set('Cookie', `${ACCESS_COOKIE}=${hs512}`);
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 for an unsigned token (alg none)', async () => {
+    const user = await createUser();
+    const part = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const exp = Math.floor(Date.now() / 1000) + 900;
+    const unsigned = `${part({ alg: 'none', typ: 'JWT' })}.${part({ sub: user.id, sid: 'some-session', exp })}.`;
+
+    const res = await request(app).get('/auth/me').set('Cookie', `${ACCESS_COOKIE}=${unsigned}`);
+
+    expect(res.status).toBe(401);
+  });
+
   it('returns 401 for an expired token', async () => {
     const user = await createUser();
-    const expired = await new SignJWT()
+    const expired = await new SignJWT({ sid: 'some-session' })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(user.id)
       .setIssuedAt(Math.floor(Date.now() / 1000) - 3600)
       .setExpirationTime(Math.floor(Date.now() / 1000) - 60)
-      .sign(new TextEncoder().encode(process.env.JWT_ACCESS_SECRET));
+      .sign(accessSecret());
 
     const res = await request(app).get('/auth/me').set('Cookie', `${ACCESS_COOKIE}=${expired}`);
 

@@ -10,6 +10,7 @@ import {
   parseBody,
 } from '../../../test/factories.js';
 import { createApp } from '../../app.js';
+import { ActivityModel } from '../activity/model.js';
 import { BoardModel } from '../boards/model.js';
 import { CardModel } from '../cards/model.js';
 
@@ -51,6 +52,19 @@ describe('PATCH /boards/:boardId/members/:userId', () => {
       .set('Cookie', await accessCookieFor(viewer))
       .send({ title: 'Now allowed' });
     expect(write.status).toBe(201);
+  });
+
+  it('treats setting the same role as a no-op: nothing logged', async () => {
+    const { board, member, ownerCookie } = await setup();
+    const before = await ActivityModel.countDocuments({ boardId: board._id });
+
+    const res = await changeRole(ownerCookie, board.id, member.id, 'member');
+
+    expect(res.status).toBe(200);
+    expect(parseBody(membersResponseSchema, res).members).toContainEqual(
+      expect.objectContaining({ id: member.id, role: 'member' }),
+    );
+    expect(await ActivityModel.countDocuments({ boardId: board._id })).toBe(before);
   });
 
   it('lets an owner step down once someone else is an owner', async () => {

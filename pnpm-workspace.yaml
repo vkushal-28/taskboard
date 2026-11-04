@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - e2e
 allowBuilds:
   esbuild: true
   # Downloads mongod at install time; it is fetched lazily on the first test run instead.

@@ -17,8 +17,13 @@ import { AppError, Unauthorized } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { findMemberRole } from '../boards/access.js';
 import { ACCESS_COOKIE, readCookie } from '../auth/cookies.js';
-import { verifyAccessToken } from '../auth/tokens.js';
-import { broadcastPresence as broadcastPresenceFor, type RealtimeServer } from './emitter.js';
+import { isSessionActive } from '../auth/service.js';
+import { verifyAccessToken, type AccessClaims } from '../auth/tokens.js';
+import {
+  broadcastPresence as broadcastPresenceFor,
+  sessionRoom,
+  type RealtimeServer,
+} from './emitter.js';
 import { createMessageLimiter, SOCKET_MESSAGE_LIMIT, type MessageLimit } from './rate-limit.js';
 
 type RealtimeSocket =
@@ -54,8 +59,8 @@ export function createRealtimeServer(
 
   io.use((socket, next) => {
     authenticate(socket.request)
-      .then((userId) => {
-        socket.data = { userId, boards: {}, dragging: null };
+      .then(({ userId, sessionId }) => {
+        socket.data = { userId, sessionId, boards: {}, dragging: null };
         next();
       })
       .catch((err: unknown) => next(toConnectError(err)));
@@ -73,7 +78,27 @@ export function createRealtimeServer(
   }
 
   io.on('connection', (socket) => {
-    const { userId } = socket.data;
+    const { userId, sessionId } = socket.data;
+    // Lets disconnectSession() reach every socket this session opened (ADR 016).
+    void socket.join(sessionRoom(sessionId));
+    // The access token stays valid for up to 15 minutes after its session is revoked, so the
+    // handshake alone would let a revoked session open a new socket. Checked after joining the
+    // session room: a revoke before this read is seen here, one after it reaches the room.
+    // Messages wait for the answer, so nothing is joined before it.
+    const sessionChecked = isSessionActive(sessionId)
+      .catch((err: unknown) => {
+        logger.error({ err }, 'session check failed');
+        return false;
+      })
+      .then((active) => {
+        if (!active) socket.disconnect(true);
+        return active;
+      });
+    socket.use((_packet, next) => {
+      void sessionChecked.then((active) => {
+        if (active) next();
+      });
+    });
 
     // Drops messages over the limit. A dropped join gets no ack, so the client's join times
     // out and is retried on the next connect. Logged once per window, not per message.
@@ -100,18 +125,29 @@ export function createRealtimeServer(
       const { boardId } = parsed.data;
       try {
         // Non-members get the same answer as a missing board, like REST (ADR 005).
-        const role = await findMemberRole(boardId, userId);
-        if (!role) {
+        if (!(await findMemberRole(boardId, userId))) {
           reply(failure('NOT_FOUND', 'Board not found'));
           return;
         }
         await socket.join(boardRoom(boardId));
+        // Read the role again now that the socket is in the room. A removal or role change
+        // between the first read and the join couldn't reach this socket through
+        // syncMemberSockets; any change after this read can.
+        const role = await findMemberRole(boardId, userId);
+        if (!role) {
+          await socket.leave(boardRoom(boardId));
+          reply(failure('NOT_FOUND', 'Board not found'));
+          return;
+        }
         socket.data.boards[boardId] = role;
         // Before the reply, so the joiner has the presence list when its join resolves.
         await broadcastPresence(boardId);
         reply({ ok: true, role });
       } catch (err) {
         logger.error({ err, boardId }, 'board join failed');
+        // The join may have happened before the failure; a failed join must not leave the
+        // socket receiving the board's events. Leaving a room it isn't in is harmless.
+        await socket.leave(boardRoom(boardId));
         reply(failure('INTERNAL_ERROR', 'Could not join the board'));
       }
     });
@@ -159,8 +195,8 @@ export function createRealtimeServer(
   return io;
 }
 
-/** The user id from the handshake's access-token cookie, or Unauthorized. */
-async function authenticate(handshake: object): Promise<string> {
+/** The user and session from the handshake's access-token cookie, or Unauthorized. */
+async function authenticate(handshake: object): Promise<AccessClaims> {
   const token = readCookie(handshake, ACCESS_COOKIE);
   if (!token) throw new Unauthorized();
   return verifyAccessToken(token);
