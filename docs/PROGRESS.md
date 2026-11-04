@@ -160,7 +160,7 @@ Claude reads this file at the start of every session. Keep the top block current
     - Each remote move is its own 5 s toast; a burst of moves stacks up toasts.
     - Also deferred: list drag-reorder (the api supports it).
   - The design screens are not in the repo. Phase 3 was built from the plan's descriptions; ask the user for them before claiming "matches the design".
-  - `docs/PROJECT-GUIDE.md` is the user's plain-English explainer. Update its phase sections when a phase finishes (Phase 4 is in, as section 8).
+  - `docs/PROJECT-GUIDE.md` is the user's plain-English explainer. Update its phase sections when a phase finishes (Phase 6 is in, as section 10).
 
 ## Phase checklist
 

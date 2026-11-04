@@ -4,7 +4,7 @@ This document explains **what** we are building, **how** we are building it, and
 
 It is a standalone explanation. Nothing in the code depends on it.
 
-_Last updated: 2026-10-24 (Phases 0, 1 and 2 done)._
+_Last updated: 2026-11-04 (Phases 0 to 6 done)._
 
 ---
 
@@ -19,10 +19,11 @@ _Last updated: 2026-10-24 (Phases 0, 1 and 2 done)._
 7. [Phase 3 — The web app: sign in, My boards, the board (done)](#7-phase-3--the-web-app-sign-in-my-boards-the-board-done)
 8. [Phase 4 — Live updates and presence (done)](#8-phase-4--live-updates-and-presence-done)
 9. [Phase 5 — Card details, comments and sharing (done)](#9-phase-5--card-details-comments-and-sharing-done)
-10. [Phases still to come](#10-phases-still-to-come)
-11. [Every tool and package, and why](#11-every-tool-and-package-and-why)
-12. [Decisions we wrote down (ADRs)](#12-decisions-we-wrote-down-adrs)
-13. [Glossary](#13-glossary)
+10. [Phase 6 — Testing and automatic checks (done)](#10-phase-6--testing-and-automatic-checks-done)
+11. [Phases still to come](#11-phases-still-to-come)
+12. [Every tool and package, and why](#12-every-tool-and-package-and-why)
+13. [Decisions we wrote down (ADRs)](#13-decisions-we-wrote-down-adrs)
+14. [Glossary](#14-glossary)
 
 ---
 
@@ -66,7 +67,7 @@ The code is written together with **Claude Code**, an AI coding assistant that r
 | `CLAUDE.md`        | The house rules: stack, architecture rules, code style, how to work.                 |
 | `docs/PLAN.md`     | The full plan: every phase and slice, with the exact instructions.                   |
 | `docs/PROGRESS.md` | A logbook: what was done, what is next, lessons learned.                             |
-| `docs/adr/`        | Records of important decisions (see [section 12](#12-decisions-we-wrote-down-adrs)). |
+| `docs/adr/`        | Records of important decisions (see [section 13](#13-decisions-we-wrote-down-adrs)). |
 
 Each session starts by reading the progress log and ends by updating it, so no context is lost between days.
 
@@ -446,16 +447,58 @@ Running it again doesn't make duplicates.
 
 ---
 
-## 10. Phases still to come
+## 10. Phase 6 — Testing and automatic checks (done)
 
-| Phase                            | What it adds                                                                                                                     |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **6 — Testing and CI hardening** | Frontend tests, an end-to-end browser test (Playwright), coverage reports, dependency security checks.                           |
-| **7 — Deploy and polish**        | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states. |
+**Goal:** find the gaps in our tests, test the whole app the way a person uses it, and make GitHub check every change automatically before it can be merged.
+
+### Slice 6.1 — Where are the tests thin? (done)
+
+- **Coverage** measures which lines of code the tests actually run. The api was already at 98% of lines, but a number alone doesn't say what's risky, so we read the untested spots one by one and wrote tests for the risky ones.
+- Those new tests found **three real bugs**, all now fixed:
+  - **Joining a board while being removed from it.** Opening a board checks "are you a member?", then joins its live channel. If the owner removed you in the split second between those two steps, you still got in and kept receiving the board's updates. Now the server checks again after joining.
+  - **A failed join still listening.** If that second check failed because of a database error, the browser was told "join failed" but its connection stayed in the board's channel. Now it leaves.
+  - **Changing a role to the same role** wrote "Priya changed Alex's role" to the history and told everyone, although nothing changed. The database always reported "1 change" because it also updated a hidden "last modified" time.
+- Coverage is now checked on every change: if it drops below 90% of lines (or 80% of branches), the automatic checks fail.
+
+### Slice 6.1b — Signing out ends the live connection too (done)
+
+- **The gap:** signing out (or the server detecting a stolen login, see Phase 1) ended your session, but a board that was already open kept its live connection and kept receiving updates.
+- **The fix:** every login now has a session number, carried inside the access token. Each live connection is filed under its session. Ending a session closes all of its connections at once, and a connection that tries to start with an ended session is turned away. Your other devices are unaffected (ADR 016).
+- **What you see:** sign out in one tab, and your other tabs of the same browser go to the sign-in page by themselves, within a fraction of a second.
+
+### Slice 6.2 — A robot that uses the app (done)
+
+- An **end-to-end test** opens a real browser with Playwright and does what a person would: signs in, creates a board, adds a list and a card, drags the card to the other list, reloads the page, and checks the card is still there. The reload is the important part: it proves the move was saved, not just shown.
+- It runs on its own copy of the app (other ports, its own database), so it never touches your boards or gets confused by an app you already have running (ADR 017).
+- The smaller tests the plan asked for (the board shows its lists and cards, viewers see no add buttons, the card popup) already existed from earlier phases.
+
+### Slice 6.3 — Automatic checks on GitHub (done)
+
+Every pull request now runs three jobs at the same time, in about two and a half minutes:
+
+| Job       | What it checks                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **ci**    | Formatting, lint, types, all unit tests (api with the coverage limits), and the production build. The coverage report is kept. |
+| **audit** | Known security holes in the packages the live app uses. It found one on day one (`body-parser`), which we fixed.               |
+| **e2e**   | The robot test above, in a real browser, against a real database. A test that only passes on a second try counts as a failure. |
+
+- **Dependabot** opens a pull request each week when our packages or GitHub's building blocks have updates. It leaves alone the versions we pinned on purpose (TypeScript, React, React Router).
+- **A surprise along the way:** the first runs failed because GitHub's machines had moved to a newer Linux that the newest MongoDB refuses to start on. We use MongoDB 8.2 in the checks, which works there, and pinned the machines to Ubuntu 24.04, where installing the test browser takes 20 seconds instead of 6 minutes.
+- **Still to do:** "branch protection" (GitHub refusing a merge until the checks pass) needs the repository to be public or a paid plan. It's planned for Phase 7, when the project goes public.
+
+**How we tested it:** 656 automated tests (api 452, web 193, shared 10, and the browser test), all passing on GitHub, plus a two-tab browser check of signing out.
 
 ---
 
-## 11. Every tool and package, and why
+## 11. Phases still to come
+
+| Phase                     | What it adds                                                                                                                     |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **7 — Deploy and polish** | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states. |
+
+---
+
+## 12. Every tool and package, and why
 
 ### Languages and runtime
 
@@ -507,7 +550,8 @@ Running it again doesn't make duplicates.
 | **Supertest**                         | Sends real HTTP requests to the api inside tests, without starting a network server.                                                                                                                                                    |
 | **mongodb-memory-server**             | Starts a temporary real MongoDB for tests. Each run starts clean, and CI needs no database service. Its install script (which would download MongoDB on every install) is turned off; it downloads once, lazily, on the first test run. |
 | **React Testing Library** + **jsdom** | Tests web pages the way a user sees them (find the button called "Sign in", click it), in a simulated browser.                                                                                                                          |
-| _Planned:_ Playwright                 | Clicking through the real app in a real browser, automatically (Phase 6).                                                                                                                                                               |
+| **Playwright**                        | Clicks through the real app in a real browser (Chromium), automatically: the end-to-end test in `e2e/`.                                                                                                                                 |
+| **@vitest/coverage-v8**               | Measures which lines the api tests run, using Node's built-in coverage, and fails the run if it drops below the limits.                                                                                                                 |
 
 ### Code quality
 
@@ -523,12 +567,13 @@ Running it again doesn't make duplicates.
 | Tool                                     | Why                                                                                        |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
 | **Docker** + **Docker Compose**          | Runs MongoDB (and optionally the whole app) identically on every machine with one command. |
-| **GitHub Actions**                       | Runs lint, typecheck, tests and build on every pull request.                               |
+| **GitHub Actions**                       | Runs the checks (ci, audit, e2e) on every pull request and on `main`.                      |
+| **Dependabot**                           | Opens weekly pull requests for package and GitHub Actions updates.                         |
 | _Planned:_ Render, Vercel, MongoDB Atlas | Hosting for the api, the web app, and the database.                                        |
 
 ---
 
-## 12. Decisions we wrote down (ADRs)
+## 13. Decisions we wrote down (ADRs)
 
 An **ADR** (Architecture Decision Record) is a short document that records an important choice: the problem, the decision, the alternatives, and the trade-offs. It answers "why did we do it this way?" long after everyone has forgotten.
 
@@ -549,40 +594,46 @@ An **ADR** (Architecture Decision Record) is a short document that records an im
 | 013 | Per-item checklist saves, card versions | Each checklist box is saved on its own, and every card carries a version number so a late, older copy never replaces a newer one.      |
 | 014 | Paging by id, stored comment count      | Long lists load "older than the last one I have", which never repeats or skips items; the comment count lives on the card.             |
 | 015 | Invite links and the last owner         | Invite links work once, for 7 days, only for the invited email, and are stored as hashes; a board can never lose its last owner.       |
+| 016 | Live connections end with the session   | Each live connection belongs to a login session; ending the session closes them, and an ended session can't open new ones.             |
+| 017 | E2E tests on their own copy of the app  | The browser test starts its own api, web app and database, so it never touches your data or a running dev server.                      |
 
 ---
 
-## 13. Glossary
+## 14. Glossary
 
-| Term                    | Meaning                                                                                                                                            |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **API**                 | The backend's set of URLs that the frontend calls to read or change data.                                                                          |
-| **REST**                | A common style of API: URLs name things (`/boards/123`), HTTP methods say what to do (`GET` read, `POST` create, `PATCH` update, `DELETE` remove). |
-| **Monorepo**            | One git repository containing several related packages.                                                                                            |
-| **Middleware**          | A function that runs before the main handler, e.g. "is the user logged in?"                                                                        |
-| **JWT**                 | JSON Web Token: a small signed message. The server can check it wasn't tampered with, without a database lookup.                                   |
-| **Hash**                | A one-way fingerprint of some data. You can check a password against its hash, but you can't turn the hash back into the password.                 |
-| **Cookie**              | A small value the browser stores and sends back to the server automatically.                                                                       |
-| **httpOnly**            | A cookie flag that hides the cookie from JavaScript.                                                                                               |
-| **SameSite**            | A cookie flag controlling whether the cookie is sent on requests coming from other websites.                                                       |
-| **CORS**                | Browser rules for which websites may call an api.                                                                                                  |
-| **CSRF**                | An attack that tricks your browser into sending a request you didn't intend.                                                                       |
-| **XSS**                 | An attack that injects malicious script into a web page.                                                                                           |
-| **Rate limiting**       | Capping how many requests someone can make in a time window.                                                                                       |
-| **Lint**                | Automatic code checks for bugs and bad patterns.                                                                                                   |
-| **Typecheck**           | Running the TypeScript compiler to find type errors without producing output.                                                                      |
-| **CI**                  | Continuous Integration: automatic checks on every change pushed to GitHub.                                                                         |
-| **Docker container**    | A lightweight, isolated box that runs a program the same way on every machine.                                                                     |
-| **Pull request (PR)**   | A proposal to merge a branch into `main`, reviewed and checked before merging.                                                                     |
-| **Fractional indexing** | Giving items sortable positions like `"a0"`, `"a0V"`, `"a1"` so an item can be placed between two others by changing only itself.                  |
-| **Role (RBAC)**         | Role-based access control: what you may do depends on your role on the board (viewer, member or owner).                                            |
-| **Database index**      | A sorted lookup table the database keeps so it can find matching records without reading every one.                                                |
-| **Race condition**      | Two things happening at the same moment and getting in each other's way, such as two people dropping a card in the same spot.                      |
-| **Optimistic update**   | Showing a change on screen immediately, before the server confirms it, and undoing it if the server says no.                                       |
-| **WebSocket**           | A connection between browser and server that stays open, so the server can send updates without being asked.                                       |
-| **Room**                | A Socket.IO group of connections. Each board has one; a message to the room reaches everyone who has that board open.                              |
-| **Presence**            | Knowing who is online right now, such as the avatars in the board header.                                                                          |
-| **Cursor pagination**   | Loading a long list in pages by asking for "the items after this one" instead of "page 2", so new items never shift the pages.                     |
-| **Atomic update**       | A database change that happens completely or not at all, with its conditions checked in the same step, so nothing can sneak in between.            |
-| **Invite token**        | The random code in an invite link. Only its hash is stored, it expires, and it works once.                                                         |
-| **Idempotent**          | Safe to do twice: doing it again gives the same result as doing it once.                                                                           |
+| Term                      | Meaning                                                                                                                                            |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **API**                   | The backend's set of URLs that the frontend calls to read or change data.                                                                          |
+| **REST**                  | A common style of API: URLs name things (`/boards/123`), HTTP methods say what to do (`GET` read, `POST` create, `PATCH` update, `DELETE` remove). |
+| **Monorepo**              | One git repository containing several related packages.                                                                                            |
+| **Middleware**            | A function that runs before the main handler, e.g. "is the user logged in?"                                                                        |
+| **JWT**                   | JSON Web Token: a small signed message. The server can check it wasn't tampered with, without a database lookup.                                   |
+| **Hash**                  | A one-way fingerprint of some data. You can check a password against its hash, but you can't turn the hash back into the password.                 |
+| **Cookie**                | A small value the browser stores and sends back to the server automatically.                                                                       |
+| **httpOnly**              | A cookie flag that hides the cookie from JavaScript.                                                                                               |
+| **SameSite**              | A cookie flag controlling whether the cookie is sent on requests coming from other websites.                                                       |
+| **CORS**                  | Browser rules for which websites may call an api.                                                                                                  |
+| **CSRF**                  | An attack that tricks your browser into sending a request you didn't intend.                                                                       |
+| **XSS**                   | An attack that injects malicious script into a web page.                                                                                           |
+| **Rate limiting**         | Capping how many requests someone can make in a time window.                                                                                       |
+| **Lint**                  | Automatic code checks for bugs and bad patterns.                                                                                                   |
+| **Typecheck**             | Running the TypeScript compiler to find type errors without producing output.                                                                      |
+| **CI**                    | Continuous Integration: automatic checks on every change pushed to GitHub.                                                                         |
+| **Docker container**      | A lightweight, isolated box that runs a program the same way on every machine.                                                                     |
+| **Pull request (PR)**     | A proposal to merge a branch into `main`, reviewed and checked before merging.                                                                     |
+| **Fractional indexing**   | Giving items sortable positions like `"a0"`, `"a0V"`, `"a1"` so an item can be placed between two others by changing only itself.                  |
+| **Role (RBAC)**           | Role-based access control: what you may do depends on your role on the board (viewer, member or owner).                                            |
+| **Database index**        | A sorted lookup table the database keeps so it can find matching records without reading every one.                                                |
+| **Race condition**        | Two things happening at the same moment and getting in each other's way, such as two people dropping a card in the same spot.                      |
+| **Optimistic update**     | Showing a change on screen immediately, before the server confirms it, and undoing it if the server says no.                                       |
+| **WebSocket**             | A connection between browser and server that stays open, so the server can send updates without being asked.                                       |
+| **Room**                  | A Socket.IO group of connections. Each board has one; a message to the room reaches everyone who has that board open.                              |
+| **Presence**              | Knowing who is online right now, such as the avatars in the board header.                                                                          |
+| **Cursor pagination**     | Loading a long list in pages by asking for "the items after this one" instead of "page 2", so new items never shift the pages.                     |
+| **Atomic update**         | A database change that happens completely or not at all, with its conditions checked in the same step, so nothing can sneak in between.            |
+| **Invite token**          | The random code in an invite link. Only its hash is stored, it expires, and it works once.                                                         |
+| **Coverage**              | How much of the code the tests actually run, measured line by line.                                                                                |
+| **End-to-end (E2E) test** | A test that drives the real app in a real browser, from sign-in to the result on screen.                                                           |
+| **Flaky test**            | A test that sometimes passes and sometimes fails without any code change; it hides real bugs and wastes time.                                      |
+| **Session**               | One login, from signing in to signing out; it survives token refreshes.                                                                            |
+| **Idempotent**            | Safe to do twice: doing it again gives the same result as doing it once.                                                                           |
