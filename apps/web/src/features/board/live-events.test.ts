@@ -4,6 +4,7 @@ import { boardDetail, card, list } from '../../test/board-fixtures';
 import {
   applyBoardEvent,
   cardIdOf,
+  cardWithHistory,
   describeRemoteMove,
   mergeBoardDetail,
   parseBoardEvent,
@@ -112,6 +113,25 @@ describe('cardIdOf', () => {
     );
     expect(cardIdOf(event('card:deleted', { cardId: 'c2', listId: 'l1' }))).toBe('c2');
     expect(cardIdOf(event('list:deleted', { listId: 'l1' }))).toBeUndefined();
+  });
+});
+
+describe('cardWithHistory', () => {
+  it('names the card each card or comment event adds history to', () => {
+    const c1 = card('c1', 'l1', 'a0');
+    const comment = {
+      id: 'm1',
+      boardId: 'b1',
+      cardId: 'c2',
+      author: null,
+      body: 'Hi',
+      createdAt: '2026-11-03T10:00:00.000Z',
+    };
+    expect(cardWithHistory(event('card:created', { card: c1 }))).toBe('c1');
+    expect(cardWithHistory(event('card:updated', { card: c1 }))).toBe('c1');
+    expect(cardWithHistory(event('card:deleted', { cardId: 'c1', listId: 'l1' }))).toBe('c1');
+    expect(cardWithHistory(event('comment:created', { comment }))).toBe('c2');
+    expect(cardWithHistory(event('list:deleted', { listId: 'l1' }))).toBeUndefined();
   });
 });
 

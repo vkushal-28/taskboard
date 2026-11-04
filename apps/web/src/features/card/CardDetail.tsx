@@ -1,6 +1,7 @@
 import type { BoardMemberDto, CardDto } from '@taskboard/shared';
 import { Avatar } from '../../components/Avatar';
 import { useNow } from '../../lib/time';
+import { CardActivity } from './CardActivity';
 import { CardChecklist } from './CardChecklist';
 import { CardSidebar } from './CardSidebar';
 import { CardDescriptionField, CardTitleField } from './CardTextFields';
@@ -108,12 +109,7 @@ export function CardDetail({
           <CardDescriptionField card={card} canEdit={canEdit} />
           <CardChecklist card={card} canEdit={canEdit} />
 
-          <section>
-            <h3 className="text-sm font-semibold text-slate-700">Activity</h3>
-            <p className="mt-2 text-sm text-slate-400">
-              Comments and this card's history are coming soon.
-            </p>
-          </section>
+          <CardActivity card={card} canEdit={canEdit} />
         </div>
 
         {canEdit && (

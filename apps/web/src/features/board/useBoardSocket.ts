@@ -16,12 +16,15 @@ import { z } from 'zod';
 import { api } from '../../lib/api';
 import { getRealtimeSocket } from '../../lib/socket';
 import { showToast } from '../../lib/toast-store';
+import { activityKeys } from '../activity/api';
 import { useAuth } from '../auth/api';
 import { boardKeys } from '../boards/api';
+import { commentKeys, storeComment } from '../card/comments-api';
 import { moveCardKey } from './api';
 import {
   applyBoardEvent,
   cardIdOf,
+  cardWithHistory,
   describeRemoteMove,
   parseBoardEvent,
   type BoardEvent,
@@ -103,6 +106,10 @@ export function useBoardSocket(boardId: string): void {
         // lost, so take the server's copy. On first load the board fetch is still running.
         const hasData = queryClient.getQueryData(queryKey) !== undefined;
         if (hasData && queryClient.isFetching({ queryKey }) === 0) refetchWhenIdle();
+        // Comments and card history missed the same events. Only an open card refetches now;
+        // the rest are marked stale.
+        void queryClient.invalidateQueries({ queryKey: commentKeys.all });
+        void queryClient.invalidateQueries({ queryKey: activityKeys.cards() });
       } catch {
         // Ack timeout. The connection is probably dropping; the next connect joins again.
       }
@@ -120,6 +127,11 @@ export function useBoardSocket(boardId: string): void {
     function onEvent(event: BoardEvent) {
       if (event.payload.boardId !== boardId) return;
       if (event.name === 'board:deleted') return onBoardDeleted();
+
+      // A card's history changed. Only an open History tab refetches; others go stale.
+      const historyOf = cardWithHistory(event);
+      if (historyOf) void queryClient.invalidateQueries({ queryKey: activityKeys.card(historyOf) });
+      if (event.name === 'comment:created') return storeComment(queryClient, event.payload.comment);
 
       if (event.name === 'card:moved' && event.payload.actorId !== userIdRef.current) {
         const detail = queryClient.getQueryData<BoardDetail>(queryKey);

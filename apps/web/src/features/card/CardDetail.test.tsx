@@ -32,6 +32,8 @@ function stubBoard(detail = detailWithChecklist(), handlers: Record<string, Fake
     'GET /auth/me': () => json(200, { user: priya }),
     'GET /boards/b1': () => json(200, detail),
     'GET /boards': () => json(200, { boards: [] }),
+    'GET /cards/c1/comments': () => json(200, { comments: [], nextCursor: null }),
+    'GET /cards/c1/activity': () => json(200, { activity: [], nextCursor: null }),
     ...handlers,
   });
 }

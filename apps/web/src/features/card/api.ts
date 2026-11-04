@@ -14,7 +14,7 @@ import { boardKeys } from '../boards/api';
 // The card modal reads from the cached board, so every write lands there: the board view
 // and the modal show the same card. Writes are not optimistic; each one stores the server's
 // copy, which also makes a socket echo of the same write a no-op (ADR 011).
-function storeCard(queryClient: QueryClient, boardId: string, card: CardDto): void {
+export function storeCard(queryClient: QueryClient, boardId: string, card: CardDto): void {
   queryClient.setQueryData<BoardDetail>(boardKeys.detail(boardId), (detail) =>
     detail ? { ...detail, cards: putCard(detail.cards, card) } : detail,
   );

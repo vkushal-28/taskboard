@@ -122,6 +122,18 @@ export function cardIdOf(event: BoardEvent): string | undefined {
   }
 }
 
+/** The card whose history an event adds to, so an open History tab can refetch. */
+export function cardWithHistory(event: BoardEvent): string | undefined {
+  switch (event.name) {
+    case 'card:created':
+      return event.payload.card.id;
+    case 'comment:created':
+      return event.payload.comment.cardId;
+    default:
+      return cardIdOf(event);
+  }
+}
+
 /**
  * "Alex moved "Homepage" to Done", for a move someone else made to another list. Reorders
  * within a list stay quiet: they are frequent and the card is still where people look for it.

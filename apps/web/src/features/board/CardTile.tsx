@@ -38,7 +38,10 @@ export function CardTile({ card, members }: CardTileProps) {
       )}
       <p className="font-medium break-words text-slate-900">{card.title}</p>
 
-      {(card.dueDate || card.checklist.length > 0 || assignees.length > 0) && (
+      {(card.dueDate ||
+        card.checklist.length > 0 ||
+        card.commentCount > 0 ||
+        assignees.length > 0) && (
         <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
           {card.dueDate && (
             <time
@@ -55,6 +58,13 @@ export function CardTile({ card, members }: CardTileProps) {
               className={done === card.checklist.length ? 'text-emerald-700' : undefined}
             >
               ☑ {done}/{card.checklist.length}
+            </span>
+          )}
+          {card.commentCount > 0 && (
+            <span
+              aria-label={`${card.commentCount} ${card.commentCount === 1 ? 'comment' : 'comments'}`}
+            >
+              💬 {card.commentCount}
             </span>
           )}
           {assignees.length > 0 && (
