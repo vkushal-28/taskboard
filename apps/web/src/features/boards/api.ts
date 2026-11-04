@@ -7,6 +7,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { activityKeys } from '../activity/api';
+import { mergeBoardDetail } from '../board/live-events';
 
 export const boardKeys = {
   all: ['boards'] as const,
@@ -29,6 +30,10 @@ export function useBoard(boardId: string) {
     queryKey: boardKeys.detail(boardId),
     queryFn: ({ signal }) =>
       api.request(`/boards/${boardId}`, { schema: boardDetailSchema, signal }),
+    // A refetch must not roll back a card that a socket event updated while it was in flight.
+    // TanStack types both arguments as unknown; this query only ever holds a BoardDetail.
+    structuralSharing: (held, fetched) =>
+      mergeBoardDetail(held as BoardDetail | undefined, fetched as BoardDetail),
   });
 }
 

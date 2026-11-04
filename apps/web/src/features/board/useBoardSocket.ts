@@ -8,6 +8,7 @@ import {
   presenceUpdateSchema,
   type BoardDetail,
   type BoardEventName,
+  type BoardMemberDto,
 } from '@taskboard/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
@@ -16,12 +17,16 @@ import { z } from 'zod';
 import { api } from '../../lib/api';
 import { getRealtimeSocket } from '../../lib/socket';
 import { showToast } from '../../lib/toast-store';
+import { activityKeys } from '../activity/api';
 import { useAuth } from '../auth/api';
 import { boardKeys } from '../boards/api';
+import { commentKeys, storeComment } from '../card/comments-api';
 import { moveCardKey } from './api';
 import {
   applyBoardEvent,
+  applyMembers,
   cardIdOf,
+  cardWithHistory,
   describeRemoteMove,
   parseBoardEvent,
   type BoardEvent,
@@ -29,6 +34,7 @@ import {
 import { applyDragging, applyPresence, resetLive, useLiveStore } from './live-store';
 
 export const BOARD_DELETED_MESSAGE = 'This board was deleted.';
+export const REMOVED_MESSAGE = 'You were removed from this board.';
 
 const joinedAckSchema = z.object({ ok: z.literal(true) });
 const connectErrorSchema = z.object({ data: z.object({ code: z.string() }) });
@@ -103,13 +109,18 @@ export function useBoardSocket(boardId: string): void {
         // lost, so take the server's copy. On first load the board fetch is still running.
         const hasData = queryClient.getQueryData(queryKey) !== undefined;
         if (hasData && queryClient.isFetching({ queryKey }) === 0) refetchWhenIdle();
+        // Comments and card history missed the same events. Only an open card refetches now;
+        // the rest are marked stale.
+        void queryClient.invalidateQueries({ queryKey: commentKeys.all });
+        void queryClient.invalidateQueries({ queryKey: activityKeys.cards() });
       } catch {
         // Ack timeout. The connection is probably dropping; the next connect joins again.
       }
     }
 
-    function onBoardDeleted() {
-      showToast(BOARD_DELETED_MESSAGE, 'info');
+    /** The board is gone for this user (deleted, or they were removed): leave its page. */
+    function leaveBoard(message: string) {
+      showToast(message, 'info');
       void queryClient.invalidateQueries({ queryKey: boardKeys.list() });
       // Remove the board only after leaving its page, or the page would refetch it and 404.
       void Promise.resolve(navigateRef.current('/', { replace: true })).then(() =>
@@ -117,9 +128,26 @@ export function useBoardSocket(boardId: string): void {
       );
     }
 
+    function onMembersUpdated(members: BoardMemberDto[]) {
+      const userId = userIdRef.current;
+      const detail = queryClient.getQueryData<BoardDetail>(queryKey);
+      if (!userId || !detail) return;
+      const updated = applyMembers(detail, members, userId);
+      if (!updated) return leaveBoard(REMOVED_MESSAGE);
+      queryClient.setQueryData(queryKey, updated);
+      // A removal also unassigns that person from cards; the refetch picks those cards up.
+      refetchWhenIdle();
+    }
+
     function onEvent(event: BoardEvent) {
       if (event.payload.boardId !== boardId) return;
-      if (event.name === 'board:deleted') return onBoardDeleted();
+      if (event.name === 'board:deleted') return leaveBoard(BOARD_DELETED_MESSAGE);
+      if (event.name === 'members:updated') return onMembersUpdated(event.payload.members);
+
+      // A card's history changed. Only an open History tab refetches; others go stale.
+      const historyOf = cardWithHistory(event);
+      if (historyOf) void queryClient.invalidateQueries({ queryKey: activityKeys.card(historyOf) });
+      if (event.name === 'comment:created') return storeComment(queryClient, event.payload.comment);
 
       if (event.name === 'card:moved' && event.payload.actorId !== userIdRef.current) {
         const detail = queryClient.getQueryData<BoardDetail>(queryKey);

@@ -1,5 +1,5 @@
 import { cardDtoSchema } from '@taskboard/shared';
-import { Error as MongooseError, Types } from 'mongoose';
+import { Types } from 'mongoose';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -214,8 +214,11 @@ describe('PATCH /cards/:cardId', () => {
 
   it('returns 404 when the card is deleted while being saved', async () => {
     const { a, cookie } = await boardWithCards();
-    vi.spyOn(CardModel.prototype, 'save').mockRejectedValueOnce(
-      new MongooseError.DocumentNotFoundError('No card matches the save'),
+    // The card is found, then gone by the time the update runs: point the update at an id
+    // that matches nothing.
+    const findOneAndUpdate = CardModel.findOneAndUpdate.bind(CardModel);
+    vi.spyOn(CardModel, 'findOneAndUpdate').mockImplementationOnce((_filter, update, options) =>
+      findOneAndUpdate({ _id: new Types.ObjectId() }, update, options),
     );
 
     const res = await request(app)

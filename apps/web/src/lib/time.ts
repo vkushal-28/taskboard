@@ -11,9 +11,13 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 
 const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
-/** "just now", "5 minutes ago", "yesterday", "3 weeks ago". Pass `now` from useNow(). */
+/**
+ * "just now", "5 minutes ago", "yesterday", "3 weeks ago". Pass `now` from useNow(). A time
+ * after `now` is "just now": useNow() is the mount time, so anything that arrives live, or
+ * from a server whose clock runs a little ahead, is newer than it.
+ */
 export function formatRelative(iso: string, now: number): string {
-  const seconds = Math.round((Date.parse(iso) - now) / 1000);
+  const seconds = Math.min(0, Math.round((Date.parse(iso) - now) / 1000));
   for (const [unit, size] of UNITS) {
     if (Math.abs(seconds) >= size) return formatter.format(Math.trunc(seconds / size), unit);
   }

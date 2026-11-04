@@ -4,7 +4,9 @@ import { RegisterPage } from '../features/auth/RegisterPage';
 import { ProtectedRoute, PublicOnlyRoute } from '../features/auth/route-guards';
 import { SignInPage } from '../features/auth/SignInPage';
 import { BoardPage } from '../features/board/BoardPage';
+import { CardDetailRoute } from '../features/card/CardDetailRoute';
 import { MyBoardsPage } from '../features/boards/MyBoardsPage';
+import { InviteAcceptPage } from '../features/sharing/InviteAcceptPage';
 import { NotFoundPage } from './NotFoundPage';
 
 function RootLayout() {
@@ -32,7 +34,13 @@ export const routes: RouteObject[] = [
         element: <ProtectedRoute />,
         children: [
           { path: '/', element: <MyBoardsPage /> },
-          { path: '/b/:boardId', element: <BoardPage /> },
+          {
+            path: '/b/:boardId',
+            element: <BoardPage />,
+            // A child route, so the board and its socket stay open behind the card modal.
+            children: [{ path: 'c/:cardId', element: <CardDetailRoute /> }],
+          },
+          { path: '/invite/:token', element: <InviteAcceptPage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

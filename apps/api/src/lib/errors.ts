@@ -23,20 +23,27 @@ export class Unauthorized extends AppError {
 }
 
 export class Forbidden extends AppError {
-  constructor(message = 'You do not have permission to do this') {
-    super(403, 'FORBIDDEN', message);
+  constructor(message = 'You do not have permission to do this', code = 'FORBIDDEN') {
+    super(403, code, message);
   }
 }
 
 export class NotFound extends AppError {
-  constructor(message = 'Resource not found') {
-    super(404, 'NOT_FOUND', message);
+  constructor(message = 'Resource not found', code = 'NOT_FOUND') {
+    super(404, code, message);
   }
 }
 
 export class Conflict extends AppError {
-  constructor(message: string) {
-    super(409, 'CONFLICT', message);
+  constructor(message: string, code = 'CONFLICT') {
+    super(409, code, message);
+  }
+}
+
+/** Something that existed but can't be used any more, e.g. an expired invite. */
+export class Gone extends AppError {
+  constructor(message: string, code = 'GONE') {
+    super(410, code, message);
   }
 }
 

@@ -17,6 +17,10 @@ const envSchema = z
     // Defaults to on in production. The Docker stack runs production builds over
     // http://localhost, where Safari drops Secure cookies, so it turns this off.
     COOKIE_SECURE: z.stringbool().optional(),
+    // Invite emails go through Resend when both are set; otherwise they are skipped and the
+    // owner copies the link from the Share dialog (ADR 015).
+    RESEND_API_KEY: z.string().min(1).optional(),
+    EMAIL_FROM: z.string().min(3).optional(),
   })
   // A localhost default in production would make CORS and the Origin check reject every
   // write from the real site, so production must set CLIENT_URL explicitly.
@@ -25,6 +29,13 @@ const envSchema = z
       ctx.addIssue({ code: 'custom', path: ['CLIENT_URL'], message: 'is required in production' });
     }
     // An https site needs Secure cookies; turning them off there is always a mistake.
+    if ((env.RESEND_API_KEY === undefined) !== (env.EMAIL_FROM === undefined)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['EMAIL_FROM'],
+        message: 'set RESEND_API_KEY and EMAIL_FROM together',
+      });
+    }
     if (env.COOKIE_SECURE === false && env.CLIENT_URL?.startsWith('https://')) {
       ctx.addIssue({
         code: 'custom',

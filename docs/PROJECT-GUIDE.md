@@ -18,10 +18,11 @@ _Last updated: 2026-10-24 (Phases 0, 1 and 2 done)._
 6. [Phase 2 — Boards, lists and cards API (done)](#6-phase-2--boards-lists-and-cards-api-done)
 7. [Phase 3 — The web app: sign in, My boards, the board (done)](#7-phase-3--the-web-app-sign-in-my-boards-the-board-done)
 8. [Phase 4 — Live updates and presence (done)](#8-phase-4--live-updates-and-presence-done)
-9. [Phases still to come](#9-phases-still-to-come)
-10. [Every tool and package, and why](#10-every-tool-and-package-and-why)
-11. [Decisions we wrote down (ADRs)](#11-decisions-we-wrote-down-adrs)
-12. [Glossary](#12-glossary)
+9. [Phase 5 — Card details, comments and sharing (done)](#9-phase-5--card-details-comments-and-sharing-done)
+10. [Phases still to come](#10-phases-still-to-come)
+11. [Every tool and package, and why](#11-every-tool-and-package-and-why)
+12. [Decisions we wrote down (ADRs)](#12-decisions-we-wrote-down-adrs)
+13. [Glossary](#13-glossary)
 
 ---
 
@@ -60,12 +61,12 @@ Small slices keep every change easy to review and easy to undo.
 
 The code is written together with **Claude Code**, an AI coding assistant that runs in the terminal. To keep it consistent across sessions, the project has a few "memory" files:
 
-| File               | Purpose                                                                            |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| `CLAUDE.md`        | The house rules: stack, architecture rules, code style, how to work.               |
-| `docs/PLAN.md`     | The full plan: every phase and slice, with the exact instructions.                 |
-| `docs/PROGRESS.md` | A logbook: what was done, what is next, lessons learned.                           |
-| `docs/adr/`        | Records of important decisions (see [section 9](#9-decisions-we-wrote-down-adrs)). |
+| File               | Purpose                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `CLAUDE.md`        | The house rules: stack, architecture rules, code style, how to work.                 |
+| `docs/PLAN.md`     | The full plan: every phase and slice, with the exact instructions.                   |
+| `docs/PROGRESS.md` | A logbook: what was done, what is next, lessons learned.                             |
+| `docs/adr/`        | Records of important decisions (see [section 12](#12-decisions-we-wrote-down-adrs)). |
 
 Each session starts by reading the progress log and ends by updating it, so no context is lost between days.
 
@@ -414,17 +415,47 @@ Running it again doesn't make duplicates.
 
 ---
 
-## 9. Phases still to come
+## 9. Phase 5 — Card details, comments and sharing (done)
 
-| Phase                                   | What it adds                                                                                                                     |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **5 — Card details, comments, invites** | Card detail popup, comments, activity history, and inviting people by email with a role.                                         |
-| **6 — Testing and CI hardening**        | Frontend tests, an end-to-end browser test (Playwright), coverage reports, dependency security checks.                           |
-| **7 — Deploy and polish**               | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states. |
+**Goal:** open a card to see and edit everything about it, talk about it in comments, see its history, and invite other people to a board with the right role.
+
+### Slice 5.1 — The card detail popup (done)
+
+- Clicking a card (or pressing Enter on it) opens a popup with its own address, like `/b/123/c/456`, so a card can be linked to. The board stays open behind it.
+- Members can edit the title, description, checklist, people, labels and due date, and archive or delete the card. Viewers see the same popup with no edit controls (the api refuses their changes anyway).
+- **Two people ticking the same checklist:** at first, ticking a box sent the whole checklist, so if Priya and Alex ticked different boxes at the same moment, one tick undid the other. Now each box is saved on its own (ADR 013).
+- **Old news arriving late:** sometimes the live update from Alex reached Priya's browser _before_ the answer to her own request, and the older answer then overwrote the newer card. Every card now has a version number that goes up with each change, and the browser always keeps the highest one.
+
+### Slice 5.2 — Comments and history (done)
+
+- The popup's Activity area has two tabs: **Comments** (with a box to write one) and **History** ("Alex moved this card to Done").
+- New comments appear live for everyone who has the card open, and each card on the board shows a 💬 count.
+- **Long lists load in pages:** the newest 20 first, then "Load older". The next page is asked for as "everything older than the last item I have". Unlike "page 2", that never repeats or skips an item when someone adds a new comment in between (ADR 014).
+- The comment count is stored on the card, so the board doesn't have to count comments every time it loads.
+
+### Slice 5.3 — Inviting people and managing roles (done)
+
+- The board owner's **Share** button opens a dialog to invite someone by email as a member or a viewer, change anyone's role, remove people, and resend or cancel pending invites.
+- **The invite link:** a long random code that works once, for 7 days, and **only for the email address that was invited**. A forwarded link is useless to anyone else. The server stores only a fingerprint (hash) of the code, so even someone who could read the database couldn't use it (ADR 015).
+- **Email and a copyable link:** the link is emailed through Resend when that's set up, and it's always shown to the owner to copy. Without a verified domain, Resend only delivers to your own address, so the copyable link is what makes inviting work for the demo.
+- **Opening an invite:** you see "Priya invited you to join Website Redesign as a member" and an Accept button. If you're not signed in, you sign in or create an account first and come straight back. Expired, cancelled, already used, or "this is for another account" each get a clear message.
+- **A board always keeps an owner:** the last owner can't be demoted or removed. The check is part of the database update itself, so two owners demoting each other at the same moment can't both succeed.
+- **Live:** when your role changes, your buttons appear or disappear immediately. If you're removed, you're told and taken back to My boards, and you stop receiving that board's updates.
+
+**How we tested it:** about 625 automated tests, plus browser checks with two people: comments and history updating live, a role change showing up in the other window, the last-owner refusal, and a brand-new person opening an invite link while signed out, registering, and joining the board.
 
 ---
 
-## 10. Every tool and package, and why
+## 10. Phases still to come
+
+| Phase                            | What it adds                                                                                                                     |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **6 — Testing and CI hardening** | Frontend tests, an end-to-end browser test (Playwright), coverage reports, dependency security checks.                           |
+| **7 — Deploy and polish**        | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states. |
+
+---
+
+## 11. Every tool and package, and why
 
 ### Languages and runtime
 
@@ -450,6 +481,7 @@ Running it again doesn't make duplicates.
 | **express-rate-limit**  | Limits how often one IP address can try to log in.                                                                                                                                    |
 | **tsx**                 | Runs TypeScript directly in development and restarts on file changes.                                                                                                                 |
 | **fractional-indexing** | Creates sortable position strings, so a card can move between two others by changing only itself. Tiny, with no dependencies of its own.                                              |
+| **Resend** (no package) | Sends invite emails. Called with a plain `fetch` request, so no extra library; turned on by the `RESEND_API_KEY` and `EMAIL_FROM` settings.                                           |
 | **socket.io**           | Live connections to the browser: rooms per board, automatic reconnects, and acknowledgements ("did the join work?"). The api's tests also use `socket.io-client` to connect for real. |
 
 ### Frontend (`apps/web`)
@@ -496,28 +528,31 @@ Running it again doesn't make duplicates.
 
 ---
 
-## 11. Decisions we wrote down (ADRs)
+## 12. Decisions we wrote down (ADRs)
 
 An **ADR** (Architecture Decision Record) is a short document that records an important choice: the problem, the decision, the alternatives, and the trade-offs. It answers "why did we do it this way?" long after everyone has forgotten.
 
-| ADR | Decision                            | In one sentence                                                                                                                        |
-| --- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 001 | TanStack Query + Zustand            | Server data is cached by TanStack Query; the tiny bit of pure UI state lives in Zustand — less boilerplate than Redux.                 |
-| 002 | Pin TypeScript 6                    | The linter that catches async bugs doesn't support TypeScript 7 yet, so we wait.                                                       |
-| 003 | Shared package from source in dev   | In development, tools read the shared package's TypeScript directly (instant changes); in production, Node reads the compiled version. |
-| 004 | Auth token strategy                 | Short JWT access token + rotating random refresh token, both in httpOnly cookies, with theft detection.                                |
-| 005 | Board members inside the board      | Each board stores its members and their roles itself; people who aren't members get "not found".                                       |
-| 006 | No multi-step database transactions | Writes that touch several collections are ordered so a crash midway leaves nothing anyone can see or reach.                            |
-| 007 | Unique positions with retry         | The database refuses two items in the same spot; the server retries at a random free spot nearby.                                      |
-| 008 | Pin React Router 7                  | Version 8 needs React 19; we stay on 7 until React and React Router are upgraded together.                                             |
-| 009 | Optimistic card moves               | A dropped card moves on screen at once; the server's copy replaces it, and a refusal puts it back and reloads the board.               |
-| 010 | Socket login and origin check       | Sockets use the same login cookie as the api, and only our own web app may open one, which blocks cross-site socket hijacking.         |
-| 011 | Apply your own live updates         | Every update is applied, even your own, and applying one twice changes nothing, so your other tabs stay in sync.                       |
-| 012 | Presence from the board's room      | "Who's online" is read from the sockets in the board's room, one entry per person; nothing extra is stored.                            |
+| ADR | Decision                                | In one sentence                                                                                                                        |
+| --- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 001 | TanStack Query + Zustand                | Server data is cached by TanStack Query; the tiny bit of pure UI state lives in Zustand — less boilerplate than Redux.                 |
+| 002 | Pin TypeScript 6                        | The linter that catches async bugs doesn't support TypeScript 7 yet, so we wait.                                                       |
+| 003 | Shared package from source in dev       | In development, tools read the shared package's TypeScript directly (instant changes); in production, Node reads the compiled version. |
+| 004 | Auth token strategy                     | Short JWT access token + rotating random refresh token, both in httpOnly cookies, with theft detection.                                |
+| 005 | Board members inside the board          | Each board stores its members and their roles itself; people who aren't members get "not found".                                       |
+| 006 | No multi-step database transactions     | Writes that touch several collections are ordered so a crash midway leaves nothing anyone can see or reach.                            |
+| 007 | Unique positions with retry             | The database refuses two items in the same spot; the server retries at a random free spot nearby.                                      |
+| 008 | Pin React Router 7                      | Version 8 needs React 19; we stay on 7 until React and React Router are upgraded together.                                             |
+| 009 | Optimistic card moves                   | A dropped card moves on screen at once; the server's copy replaces it, and a refusal puts it back and reloads the board.               |
+| 010 | Socket login and origin check           | Sockets use the same login cookie as the api, and only our own web app may open one, which blocks cross-site socket hijacking.         |
+| 011 | Apply your own live updates             | Every update is applied, even your own, and applying one twice changes nothing, so your other tabs stay in sync.                       |
+| 012 | Presence from the board's room          | "Who's online" is read from the sockets in the board's room, one entry per person; nothing extra is stored.                            |
+| 013 | Per-item checklist saves, card versions | Each checklist box is saved on its own, and every card carries a version number so a late, older copy never replaces a newer one.      |
+| 014 | Paging by id, stored comment count      | Long lists load "older than the last one I have", which never repeats or skips items; the comment count lives on the card.             |
+| 015 | Invite links and the last owner         | Invite links work once, for 7 days, only for the invited email, and are stored as hashes; a board can never lose its last owner.       |
 
 ---
 
-## 12. Glossary
+## 13. Glossary
 
 | Term                    | Meaning                                                                                                                                            |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -547,4 +582,7 @@ An **ADR** (Architecture Decision Record) is a short document that records an im
 | **WebSocket**           | A connection between browser and server that stays open, so the server can send updates without being asked.                                       |
 | **Room**                | A Socket.IO group of connections. Each board has one; a message to the room reaches everyone who has that board open.                              |
 | **Presence**            | Knowing who is online right now, such as the avatars in the board header.                                                                          |
+| **Cursor pagination**   | Loading a long list in pages by asking for "the items after this one" instead of "page 2", so new items never shift the pages.                     |
+| **Atomic update**       | A database change that happens completely or not at all, with its conditions checked in the same step, so nothing can sneak in between.            |
+| **Invite token**        | The random code in an invite link. Only its hash is stored, it expires, and it works once.                                                         |
 | **Idempotent**          | Safe to do twice: doing it again gives the same result as doing it once.                                                                           |

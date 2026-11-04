@@ -1,4 +1,10 @@
-import { createCardSchema, moveCardSchema, updateCardSchema } from '@taskboard/shared';
+import {
+  addChecklistItemSchema,
+  createCardSchema,
+  moveCardSchema,
+  updateCardSchema,
+  updateChecklistItemSchema,
+} from '@taskboard/shared';
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/require-auth.js';
 import { requireBoardRole } from '../../middleware/require-board-role.js';
@@ -30,6 +36,21 @@ export function createCardsRouter(): Router {
     controller.moveCard,
   );
   router.delete('/cards/:cardId', ...memberOnly, controller.deleteCard);
+
+  // One item at a time, so concurrent ticks don't overwrite each other (ADR 013).
+  router.post(
+    '/cards/:cardId/checklist',
+    ...memberOnly,
+    validateBody(addChecklistItemSchema),
+    controller.addChecklistItem,
+  );
+  router.patch(
+    '/cards/:cardId/checklist/:itemId',
+    ...memberOnly,
+    validateBody(updateChecklistItemSchema),
+    controller.updateChecklistItem,
+  );
+  router.delete('/cards/:cardId/checklist/:itemId', ...memberOnly, controller.deleteChecklistItem);
 
   return router;
 }

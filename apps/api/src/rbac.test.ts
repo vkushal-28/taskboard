@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { hasRole, type Role } from '@taskboard/shared';
 import request from 'supertest';
@@ -11,6 +12,7 @@ import {
 } from '../test/factories.js';
 import { createApp } from './app.js';
 import { ActivityModel } from './modules/activity/model.js';
+import { InviteModel } from './modules/invites/model.js';
 
 // Walks docs/permissions.md: every board-scoped endpoint, called by every kind of user.
 
@@ -105,6 +107,93 @@ const ENDPOINTS: Endpoint[] = [
     successStatus: 204,
     request: ({ card }) => ({ path: `/cards/${card.id}` }),
   },
+  {
+    route: 'POST /cards/:cardId/checklist',
+    minRole: 'member',
+    successStatus: 201,
+    request: ({ card }) => ({ path: `/cards/${card.id}/checklist`, body: { text: 'New' } }),
+  },
+  {
+    route: 'PATCH /cards/:cardId/checklist/:itemId',
+    minRole: 'member',
+    successStatus: 200,
+    request: ({ card, itemId }) => ({
+      path: `/cards/${card.id}/checklist/${itemId}`,
+      body: { done: true },
+    }),
+  },
+  {
+    route: 'DELETE /cards/:cardId/checklist/:itemId',
+    minRole: 'member',
+    successStatus: 200,
+    request: ({ card, itemId }) => ({ path: `/cards/${card.id}/checklist/${itemId}` }),
+  },
+  {
+    route: 'GET /cards/:cardId/comments',
+    minRole: 'viewer',
+    successStatus: 200,
+    request: ({ card }) => ({ path: `/cards/${card.id}/comments` }),
+  },
+  {
+    route: 'POST /cards/:cardId/comments',
+    minRole: 'member',
+    successStatus: 201,
+    request: ({ card }) => ({ path: `/cards/${card.id}/comments`, body: { body: 'Hi' } }),
+  },
+  {
+    route: 'GET /boards/:boardId/activity',
+    minRole: 'viewer',
+    successStatus: 200,
+    request: ({ board }) => ({ path: `/boards/${board.id}/activity` }),
+  },
+  {
+    route: 'GET /cards/:cardId/activity',
+    minRole: 'viewer',
+    successStatus: 200,
+    request: ({ card }) => ({ path: `/cards/${card.id}/activity` }),
+  },
+  {
+    route: 'GET /boards/:boardId/invites',
+    minRole: 'owner',
+    successStatus: 200,
+    request: ({ board }) => ({ path: `/boards/${board.id}/invites` }),
+  },
+  {
+    route: 'POST /boards/:boardId/invites',
+    minRole: 'owner',
+    successStatus: 201,
+    request: ({ board }) => ({
+      path: `/boards/${board.id}/invites`,
+      body: { email: 'new@example.com' },
+    }),
+  },
+  {
+    route: 'POST /boards/:boardId/invites/:inviteId/resend',
+    minRole: 'owner',
+    successStatus: 200,
+    request: ({ board, inviteId }) => ({ path: `/boards/${board.id}/invites/${inviteId}/resend` }),
+  },
+  {
+    route: 'DELETE /boards/:boardId/invites/:inviteId',
+    minRole: 'owner',
+    successStatus: 204,
+    request: ({ board, inviteId }) => ({ path: `/boards/${board.id}/invites/${inviteId}` }),
+  },
+  {
+    route: 'PATCH /boards/:boardId/members/:userId',
+    minRole: 'owner',
+    successStatus: 200,
+    request: ({ board, member }) => ({
+      path: `/boards/${board.id}/members/${member.id}`,
+      body: { role: 'viewer' },
+    }),
+  },
+  {
+    route: 'DELETE /boards/:boardId/members/:userId',
+    minRole: 'owner',
+    successStatus: 200,
+    request: ({ board, member }) => ({ path: `/boards/${board.id}/members/${member.id}` }),
+  },
 ];
 
 /** Routes that only need a signed-in user, not a board role. */
@@ -120,8 +209,17 @@ async function createFixture() {
   const roles = await createBoardWithRoles();
   const list = await createList(roles.board._id);
   const otherList = await createList(roles.board._id);
-  const card = await createCard(list);
-  return { ...roles, list, otherList, card };
+  const card = await createCard(list, { checklist: [{ text: 'First step' }] });
+  const itemId = card.checklist[0]?._id.toString() ?? '';
+  const invite = await InviteModel.create({
+    boardId: roles.board._id,
+    email: 'invited@example.com',
+    role: 'member',
+    tokenHash: randomUUID(),
+    invitedBy: roles.owner._id,
+    expiresAt: new Date(Date.now() + 60_000),
+  });
+  return { ...roles, list, otherList, card, itemId, inviteId: invite.id };
 }
 
 async function cookieFor(fixture: Fixture, actor: Actor): Promise<string | undefined> {

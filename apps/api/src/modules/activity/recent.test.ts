@@ -27,10 +27,13 @@ async function recentActivity(cookie: string, query = '') {
 
 // Raw inserts with explicit timestamps; rows written through the api in one test can share a
 // millisecond, which would make "newest first" untestable.
+// Feeds sort by _id, so each row's _id carries its age (ADR 014). Ages must differ: ids made
+// from the same second would collide.
 async function insertActivity(boardId: Types.ObjectId, actorId: Types.ObjectId, ages: number[]) {
   const now = Date.now();
   await ActivityModel.collection.insertMany(
     ages.map((secondsAgo) => ({
+      _id: Types.ObjectId.createFromTime(Math.floor(now / 1000) - secondsAgo),
       boardId,
       actorId,
       cardId: null,
