@@ -2,6 +2,7 @@ import { createServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
   BOARD_JOIN,
+  BOARD_LEAVE,
   CARD_DRAG,
   CARD_DRAGGING,
   cardDraggingSchema,
@@ -15,7 +16,7 @@ import {
 } from '@taskboard/shared';
 import { io as connect, type Socket } from 'socket.io-client';
 import request from 'supertest';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   accessCookieFor,
   createBoardWithRoles,
@@ -24,6 +25,7 @@ import {
   createUser,
 } from '../../../test/factories.js';
 import { createApp } from '../../app.js';
+import { BoardModel } from '../boards/model.js';
 import { emitToBoard, setRealtimeServer, type RealtimeServer } from './emitter.js';
 import { createRealtimeServer } from './server.js';
 
@@ -47,6 +49,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   openSockets.splice(0).forEach((socket) => socket.disconnect());
 });
 
@@ -145,7 +148,117 @@ describe('board:join', () => {
     const ack = await join(socket, { boardId: 'nope' });
     expect(ack).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
   });
+
+  it('answers INTERNAL_ERROR and stays out of the room when the role lookup fails', async () => {
+    const { board, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    vi.spyOn(BoardModel, 'findOne').mockImplementationOnce(() => {
+      throw new Error('database unavailable');
+    });
+
+    const ack = await join(socket, { boardId: board.id });
+
+    expect(ack).toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } });
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('ignores a join sent without an ack callback', async () => {
+    const { board, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+
+    socket.emit(BOARD_JOIN, { boardId: board.id }, undefined as never);
+    await roundTrip(socket);
+
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('survives malformed leave and drag messages', async () => {
+    const { board, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    await join(socket, { boardId: board.id });
+
+    // Malformed on purpose: a bad board id, and a drag without a card id.
+    socket.emit(BOARD_LEAVE, { boardId: 'nope' });
+    socket.emit(CARD_DRAG, { boardId: board.id } as never);
+    await roundTrip(socket);
+
+    expect(socket.connected).toBe(true);
+    expect(await userIdsInRoom(board.id)).toEqual([member.id]);
+  });
 });
+
+describe('board:join racing a membership change', () => {
+  /**
+   * Runs `change` right after the join's role lookup for `userId` has read the board, before
+   * the handler continues. That is the gap between checking membership and joining the room.
+   */
+  function changeDuringRoleLookup(userId: string, change: () => Promise<unknown>): () => boolean {
+    const findOne = BoardModel.findOne.bind(BoardModel);
+    let fired = false;
+    vi.spyOn(BoardModel, 'findOne').mockImplementation((...args: Parameters<typeof findOne>) => {
+      const query = findOne(...args);
+      const filter: unknown = args[0];
+      const isLookup =
+        typeof filter === 'object' &&
+        filter !== null &&
+        'members.userId' in filter &&
+        String(filter['members.userId']) === userId;
+      if (fired || !isLookup) return query;
+      fired = true;
+      const exec = query.exec.bind(query);
+      query.exec = async () => {
+        const result = await exec();
+        await change();
+        return result;
+      };
+      return query;
+    });
+    return () => fired;
+  }
+
+  it('keeps out a member who is removed while their join checks the role', async () => {
+    const { board, owner, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    const ownerCookie = await accessCookieFor(owner);
+    const fired = changeDuringRoleLookup(member.id, () =>
+      request(app)
+        .delete(`/boards/${board.id}/members/${member.id}`)
+        .set('Cookie', ownerCookie)
+        .expect(200),
+    );
+
+    const ack = await join(socket, { boardId: board.id });
+
+    expect(fired()).toBe(true);
+    expect(ack).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('stores the new role of a member who is demoted while their join checks the role', async () => {
+    const { board, owner, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    const ownerCookie = await accessCookieFor(owner);
+    const fired = changeDuringRoleLookup(member.id, () =>
+      request(app)
+        .patch(`/boards/${board.id}/members/${member.id}`)
+        .set('Cookie', ownerCookie)
+        .send({ role: 'viewer' })
+        .expect(200),
+    );
+
+    const ack = await join(socket, { boardId: board.id });
+
+    expect(fired()).toBe(true);
+    expect(ack).toEqual({ ok: true, role: 'viewer' });
+    const [joined] = await io.in(`board:${board.id}`).fetchSockets();
+    expect(joined?.data.boards[board.id]).toBe('viewer');
+  });
+});
+
+async function userIdsInRoom(boardId: string): Promise<string[]> {
+  const sockets = await io.in(`board:${boardId}`).fetchSockets();
+  return sockets.map((socket) => socket.data.userId);
+}
 
 describe('board events', () => {
   it('sends a REST write to sockets in that board room only', async () => {

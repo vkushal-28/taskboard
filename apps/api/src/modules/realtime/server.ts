@@ -100,12 +100,20 @@ export function createRealtimeServer(
       const { boardId } = parsed.data;
       try {
         // Non-members get the same answer as a missing board, like REST (ADR 005).
-        const role = await findMemberRole(boardId, userId);
-        if (!role) {
+        if (!(await findMemberRole(boardId, userId))) {
           reply(failure('NOT_FOUND', 'Board not found'));
           return;
         }
         await socket.join(boardRoom(boardId));
+        // Read the role again now that the socket is in the room. A removal or role change
+        // between the first read and the join couldn't reach this socket through
+        // syncMemberSockets; any change after this read can.
+        const role = await findMemberRole(boardId, userId);
+        if (!role) {
+          await socket.leave(boardRoom(boardId));
+          reply(failure('NOT_FOUND', 'Board not found'));
+          return;
+        }
         socket.data.boards[boardId] = role;
         // Before the reply, so the joiner has the presence list when its join resolves.
         await broadcastPresence(boardId);
