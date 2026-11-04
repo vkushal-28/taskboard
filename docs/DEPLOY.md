@@ -80,7 +80,5 @@ and exits if it can't reach the database.
   30–60 s. Vercel's proxy may time out on it, and a retry succeeds.
 - **Preview deployments** on Vercel have their own URLs, which `CLIENT_URL` doesn't allow, so
   only the production URL works.
-- **Live updates** need the socket tickets of Slice 7.1b: the socket can't send the login cookie
-  to Render, which is a different site.
 - **Direct calls to Render** skip Vercel. With `TRUST_PROXY=2` such a caller could fake its IP for
   the rate limits; restricting the origin to Vercel traffic with a secret header is a follow-up.

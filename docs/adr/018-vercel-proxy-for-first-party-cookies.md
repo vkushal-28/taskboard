@@ -1,6 +1,6 @@
 # ADR 018: Serve the api through Vercel so login cookies are first-party
 
-- **Status:** Accepted (socket tickets land in Slice 7.1b)
+- **Status:** Accepted
 - **Date:** 2026-11-04
 
 ## Context
@@ -30,9 +30,19 @@ Vercel can forward a path to another server (an external rewrite). It can't forw
    default when the origin allows it, and every api answer is per-user.
 5. **`TRUST_PROXY`** (hop count) makes `req.ip` the visitor's address behind Vercel and Render,
    so rate limits are per client instead of one shared counter.
-6. **The socket connects to Render directly** (`VITE_SOCKET_URL`). It can't carry the cookie
-   there, so it authenticates with a short-lived, single-use ticket fetched over REST (Slice
-   7.1b; this part replaces ADR 010's cookie handshake).
+6. **The socket connects to Render directly** (`VITE_SOCKET_URL`) and logs in with a ticket,
+   replacing ADR 010's cookie handshake:
+   - `POST /realtime/ticket` (login cookie, Origin check, 30 per user per minute) returns 32
+     random bytes. Only the SHA-256 is stored, with the user and session, for 30 s (a TTL index
+     cleans up unused ones).
+   - The handshake sends it in Socket.IO's `auth`. The server redeems it with one atomic
+     `findOneAndDelete` (hash + not expired), so a ticket opens exactly one socket. Then the
+     session check of ADR 016 runs as before.
+   - The client passes a _function_ as `auth`; Socket.IO calls it before every connection
+     attempt, so reconnects fetch a fresh ticket. That request is ordinary REST, so an expired
+     access token is refreshed on the way.
+   - Tickets are the only way in, also in development and Docker, so there is one mechanism to
+     keep secure and tested.
 
 ## Alternatives considered
 
@@ -52,6 +62,10 @@ Vercel can forward a path to another server (an external rewrite). It can't forw
 - Bad: a caller who goes to Render directly can send their own `X-Forwarded-For`. With
   `TRUST_PROXY=2` that fakes their address for the rate limits. Follow-up: have Vercel add a
   secret header and reject requests without it.
-- Bad: the socket needs its own authentication (tickets), one more mechanism to keep secure.
+- Bad: the socket needs its own authentication (tickets), one more mechanism to keep secure,
+  and one extra request (and database write) per connection.
+- Accepted risk: unlike the cookie, the ticket is readable by JavaScript. It is single-use,
+  expires in 30 s, only opens a socket, and is tied to a session that can be revoked; script
+  injected into our page could call the api with the cookie anyway.
 - Follow-ups: confirm the hop count after the first deploy (Slice 7.2); a custom domain later
   would let the socket go back to the cookie.
