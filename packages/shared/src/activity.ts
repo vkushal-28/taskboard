@@ -15,6 +15,10 @@ export const activityTypeSchema = z.enum([
   'card.restored',
   'card.deleted',
   'comment.created',
+  'member.invited',
+  'member.joined',
+  'member.role_changed',
+  'member.removed',
 ]);
 
 export type ActivityType = z.infer<typeof activityTypeSchema>;

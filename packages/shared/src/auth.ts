@@ -5,7 +5,7 @@ const PASSWORD_MAX_BYTES = 72;
 
 // Normalise before validating: z.email() checks the raw string, so surrounding spaces from a
 // paste would otherwise fail as "Invalid email".
-const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
+export const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
 export const registerSchema = z.object({
   name: z.string().trim().min(1).max(80),

@@ -8,29 +8,35 @@ Every board-scoped route needs a signed-in user first:
 - **Not a member of the board** (or the board, list or card does not exist): 404 `NOT_FOUND`, so board ids do not leak (ADR 005)
 - **Member below the route's min role:** 403 `FORBIDDEN`
 
-| Endpoint                                  | Min role  | owner | member | viewer |
-| ----------------------------------------- | --------- | ----- | ------ | ------ |
-| `GET /boards`                             | signed in | ✓     | ✓      | ✓      |
-| `POST /boards`                            | signed in | ✓     | ✓      | ✓      |
-| `GET /boards/:boardId`                    | viewer    | ✓     | ✓      | ✓      |
-| `PATCH /boards/:boardId`                  | owner     | ✓     | 403    | 403    |
-| `DELETE /boards/:boardId`                 | owner     | ✓     | 403    | 403    |
-| `POST /boards/:boardId/lists`             | member    | ✓     | ✓      | 403    |
-| `PATCH /lists/:listId`                    | member    | ✓     | ✓      | 403    |
-| `PATCH /lists/:listId/move`               | member    | ✓     | ✓      | 403    |
-| `DELETE /lists/:listId`                   | member    | ✓     | ✓      | 403    |
-| `POST /lists/:listId/cards`               | member    | ✓     | ✓      | 403    |
-| `GET /cards/:cardId`                      | viewer    | ✓     | ✓      | ✓      |
-| `PATCH /cards/:cardId`                    | member    | ✓     | ✓      | 403    |
-| `PATCH /cards/:cardId/move`               | member    | ✓     | ✓      | 403    |
-| `DELETE /cards/:cardId`                   | member    | ✓     | ✓      | 403    |
-| `POST /cards/:cardId/checklist`           | member    | ✓     | ✓      | 403    |
-| `PATCH /cards/:cardId/checklist/:itemId`  | member    | ✓     | ✓      | 403    |
-| `DELETE /cards/:cardId/checklist/:itemId` | member    | ✓     | ✓      | 403    |
-| `GET /cards/:cardId/comments`             | viewer    | ✓     | ✓      | ✓      |
-| `POST /cards/:cardId/comments`            | member    | ✓     | ✓      | 403    |
-| `GET /boards/:boardId/activity`           | viewer    | ✓     | ✓      | ✓      |
-| `GET /cards/:cardId/activity`             | viewer    | ✓     | ✓      | ✓      |
+| Endpoint                                         | Min role  | owner | member | viewer |
+| ------------------------------------------------ | --------- | ----- | ------ | ------ |
+| `GET /boards`                                    | signed in | ✓     | ✓      | ✓      |
+| `POST /boards`                                   | signed in | ✓     | ✓      | ✓      |
+| `GET /boards/:boardId`                           | viewer    | ✓     | ✓      | ✓      |
+| `PATCH /boards/:boardId`                         | owner     | ✓     | 403    | 403    |
+| `DELETE /boards/:boardId`                        | owner     | ✓     | 403    | 403    |
+| `POST /boards/:boardId/lists`                    | member    | ✓     | ✓      | 403    |
+| `PATCH /lists/:listId`                           | member    | ✓     | ✓      | 403    |
+| `PATCH /lists/:listId/move`                      | member    | ✓     | ✓      | 403    |
+| `DELETE /lists/:listId`                          | member    | ✓     | ✓      | 403    |
+| `POST /lists/:listId/cards`                      | member    | ✓     | ✓      | 403    |
+| `GET /cards/:cardId`                             | viewer    | ✓     | ✓      | ✓      |
+| `PATCH /cards/:cardId`                           | member    | ✓     | ✓      | 403    |
+| `PATCH /cards/:cardId/move`                      | member    | ✓     | ✓      | 403    |
+| `DELETE /cards/:cardId`                          | member    | ✓     | ✓      | 403    |
+| `POST /cards/:cardId/checklist`                  | member    | ✓     | ✓      | 403    |
+| `PATCH /cards/:cardId/checklist/:itemId`         | member    | ✓     | ✓      | 403    |
+| `DELETE /cards/:cardId/checklist/:itemId`        | member    | ✓     | ✓      | 403    |
+| `GET /cards/:cardId/comments`                    | viewer    | ✓     | ✓      | ✓      |
+| `POST /cards/:cardId/comments`                   | member    | ✓     | ✓      | 403    |
+| `GET /boards/:boardId/activity`                  | viewer    | ✓     | ✓      | ✓      |
+| `GET /cards/:cardId/activity`                    | viewer    | ✓     | ✓      | ✓      |
+| `GET /boards/:boardId/invites`                   | owner     | ✓     | 403    | 403    |
+| `POST /boards/:boardId/invites`                  | owner     | ✓     | 403    | 403    |
+| `POST /boards/:boardId/invites/:inviteId/resend` | owner     | ✓     | 403    | 403    |
+| `DELETE /boards/:boardId/invites/:inviteId`      | owner     | ✓     | 403    | 403    |
+| `PATCH /boards/:boardId/members/:userId`         | owner     | ✓     | 403    | 403    |
+| `DELETE /boards/:boardId/members/:userId`        | owner     | ✓     | 403    | 403    |
 
 `GET /boards` and `POST /boards` are not board-scoped: they only need `requireAuth`. `GET /boards` returns only boards the user is a member of.
 
@@ -42,7 +48,9 @@ Viewers can read comments and activity but can't comment. A new comment also bum
 
 A move whose target `listId` is on another board is rejected by the cards service with 409 (Slice 2.3), not by the middleware, because the target is in the body, not the url.
 
-Phase 5 adds invites, member role changes and member removal (owner only) to this table.
+Invites, role changes and removals are owner only. A board always keeps at least one owner: demoting or removing the last one gets 409 `LAST_OWNER`, checked inside the same atomic update (ADR 015).
+
+**Invite links** (`GET /invites/:token`, `POST /invites/:token/accept`) aren't board-scoped: they need a signed-in user whose email matches the invite, otherwise 403 `INVITE_WRONG_ACCOUNT`. An unknown token gets 404 `INVITE_NOT_FOUND`; a revoked, used or expired one gets 410 `INVITE_REVOKED`, `INVITE_USED` or `INVITE_EXPIRED`. An invite grants `member` or `viewer`, never `owner`.
 
 ## Socket events (Phase 4)
 
@@ -57,4 +65,6 @@ Sockets are read-only. Every write goes through REST and the routes above; the s
 
 **Rate limit:** each socket may send 20 messages per second (`SOCKET_MESSAGE_LIMIT`); the excess is dropped, and a dropped `board:join` gets no reply.
 
-Membership is checked when a socket joins, not on every event. Phase 5 must remove a member's sockets from the room when they are removed from the board (ADR 010).
+Membership is checked when a socket joins, not on every event. A role change updates the role on the user's open sockets, and a removal takes their sockets out of the room right after the `members:updated` broadcast, so they hear that they were removed and nothing after it (ADR 010).
+
+- **`members:updated { boardId, actorId, members }`** (server to room): after an invite is accepted, a role changes or a member is removed.

@@ -8,7 +8,6 @@ import {
   CARD_DRAGGING,
   cardDragSchema,
   hasRole,
-  PRESENCE_UPDATE,
   type BoardJoinAck,
 } from '@taskboard/shared';
 import cookieParser from 'cookie-parser';
@@ -19,7 +18,7 @@ import { logger } from '../../lib/logger.js';
 import { findMemberRole } from '../boards/access.js';
 import { ACCESS_COOKIE, readCookie } from '../auth/cookies.js';
 import { verifyAccessToken } from '../auth/tokens.js';
-import { type RealtimeServer } from './emitter.js';
+import { broadcastPresence as broadcastPresenceFor, type RealtimeServer } from './emitter.js';
 import { createMessageLimiter, SOCKET_MESSAGE_LIMIT, type MessageLimit } from './rate-limit.js';
 
 type RealtimeSocket =
@@ -62,17 +61,7 @@ export function createRealtimeServer(
       .catch((err: unknown) => next(toConnectError(err)));
   });
 
-  // Presence is read from the room itself, so it can't drift from who actually receives
-  // events, and it keeps working across instances with a shared adapter (ADR 012).
-  async function broadcastPresence(boardId: string): Promise<void> {
-    try {
-      const sockets = await io.in(boardRoom(boardId)).fetchSockets();
-      const userIds = [...new Set(sockets.map((socket) => socket.data.userId))];
-      io.to(boardRoom(boardId)).emit(PRESENCE_UPDATE, { boardId, userIds });
-    } catch (err) {
-      logger.error({ err, boardId }, 'failed to broadcast presence');
-    }
-  }
+  const broadcastPresence = (boardId: string) => broadcastPresenceFor(io, boardId);
 
   function endDrag(socket: RealtimeSocket, boardId?: string): void {
     const { dragging, userId } = socket.data;

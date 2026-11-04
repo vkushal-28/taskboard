@@ -19,6 +19,10 @@ const SENTENCES: Record<ActivityType, (item: ActivityItem) => string> = {
   'card.restored': (item) => `restored ${card(item)}`,
   'card.deleted': (item) => `deleted ${card(item)}`,
   'comment.created': (item) => `commented on ${card(item)}`,
+  'member.invited': () => 'invited someone to the board',
+  'member.joined': () => 'joined the board',
+  'member.role_changed': () => "changed a member's role",
+  'member.removed': () => 'removed a member',
 };
 
 /** "moved "Login page" to "Done"". The actor's name is rendered separately. */

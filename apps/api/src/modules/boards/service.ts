@@ -12,6 +12,7 @@ import { ActivityModel } from '../activity/model.js';
 import { logActivity } from '../activity/service.js';
 import { CardModel, toCardDto } from '../cards/model.js';
 import { CommentModel } from '../comments/model.js';
+import { InviteModel } from '../invites/model.js';
 import { ListModel, toListDto } from '../lists/model.js';
 import { closeBoardRoom, emitToBoard } from '../realtime/emitter.js';
 import { BoardModel, type BoardMember } from './model.js';
@@ -141,6 +142,7 @@ export async function deleteBoard(boardId: string, actorId: string): Promise<voi
     CardModel.deleteMany({ boardId }),
     ActivityModel.deleteMany({ boardId }),
     CommentModel.deleteMany({ boardId }),
+    InviteModel.deleteMany({ boardId }),
   ]);
 }
 

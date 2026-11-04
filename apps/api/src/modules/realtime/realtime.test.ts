@@ -202,6 +202,8 @@ describe('board events', () => {
   const writes: {
     event: BoardEventName;
     send: (f: Awaited<ReturnType<typeof writeFixture>>) => request.Test;
+    /** Who makes the write; board and member changes are owner-only. */
+    actor?: 'owner';
   }[] = [
     {
       event: 'list:created',
@@ -247,6 +249,20 @@ describe('board events', () => {
       send: (f) => f.as('owner').patch(`/boards/${f.board.id}`).send({ title: 'Renamed' }),
     },
     { event: 'board:deleted', send: (f) => f.as('owner').delete(`/boards/${f.board.id}`) },
+    {
+      event: 'members:updated',
+      actor: 'owner',
+      send: (f) =>
+        f
+          .as('owner')
+          .patch(`/boards/${f.board.id}/members/${f.member.id}`)
+          .send({ role: 'viewer' }),
+    },
+    {
+      event: 'members:updated',
+      actor: 'owner',
+      send: (f) => f.as('owner').delete(`/boards/${f.board.id}/members/${f.member.id}`),
+    },
   ];
 
   async function writeFixture() {
@@ -266,7 +282,7 @@ describe('board events', () => {
     return { ...fixture, list, target, card, as };
   }
 
-  it.each(writes)('broadcasts $event after the write', async ({ event, send }) => {
+  it.each(writes)('broadcasts $event after the write', async ({ event, send, actor: writer }) => {
     const fixture = await writeFixture();
     const watcher = await connectedAs(fixture.viewer);
     await join(watcher, { boardId: fixture.board.id });
@@ -277,7 +293,7 @@ describe('board events', () => {
 
     const payload = boardEventSchemas[event].parse(await received);
     expect(payload).toMatchObject({ boardId: fixture.board.id });
-    const actor = event.startsWith('board:') ? fixture.owner : fixture.member;
+    const actor = writer === 'owner' || event.startsWith('board:') ? fixture.owner : fixture.member;
     expect(payload.actorId).toBe(actor.id);
   });
 
@@ -306,6 +322,82 @@ describe('board events', () => {
     await fixture.as('owner').delete(`/boards/${fixture.board.id}`).expect(204);
     const sockets = await io.in(`board:${fixture.board.id}`).fetchSockets();
     expect(sockets).toHaveLength(0);
+  });
+});
+
+describe('membership changes', () => {
+  const ownerCookieOf = (fixture: Awaited<ReturnType<typeof createBoardWithRoles>>) =>
+    accessCookieFor(fixture.owner);
+
+  it('takes a removed member out of the room after telling them', async () => {
+    const fixture = await createBoardWithRoles();
+    const { board, owner, member } = fixture;
+    const watcher = await connectedAs(owner);
+    await join(watcher, { boardId: board.id });
+    const removed = await connectedAs(member);
+    await join(removed, { boardId: board.id });
+
+    const told = nextEvent(removed, 'members:updated');
+    const presence = nextSignal(watcher, PRESENCE_UPDATE, onlineIs(owner.id));
+    await request(app)
+      .delete(`/boards/${board.id}/members/${member.id}`)
+      .set('Cookie', await ownerCookieOf(fixture))
+      .expect(200);
+
+    const payload = boardEventSchemas['members:updated'].parse(await told);
+    expect(payload.members.map((item) => item.id)).not.toContain(member.id);
+    await presence;
+    expect(await io.in(`board:${board.id}`).fetchSockets()).toHaveLength(1);
+
+    let later = 0;
+    removed.onAny(() => (later += 1));
+    emitToBoard(board.id, 'board:deleted', { boardId: board.id, actorId: owner.id });
+    await roundTrip(removed);
+    expect(later).toBe(0);
+  });
+
+  it('applies a new role to open sockets: a promoted viewer can send drag cues', async () => {
+    const fixture = await createBoardWithRoles();
+    const { board, owner, viewer } = fixture;
+    const card = await createCard(await createList(board._id));
+    const watcher = await connectedAs(owner);
+    await join(watcher, { boardId: board.id });
+    const promoted = await connectedAs(viewer);
+    await join(promoted, { boardId: board.id });
+
+    await request(app)
+      .patch(`/boards/${board.id}/members/${viewer.id}`)
+      .set('Cookie', await ownerCookieOf(fixture))
+      .send({ role: 'member' })
+      .expect(200);
+
+    const cue = nextSignal(watcher, CARD_DRAGGING);
+    promoted.emit(CARD_DRAG, { boardId: board.id, cardId: card.id });
+    expect(cardDraggingSchema.parse(await cue)).toMatchObject({ userId: viewer.id });
+  });
+
+  it('announces a new member who accepted an invite', async () => {
+    const fixture = await createBoardWithRoles();
+    const { board, owner } = fixture;
+    const watcher = await connectedAs(owner);
+    await join(watcher, { boardId: board.id });
+    const invited = await request(app)
+      .post(`/boards/${board.id}/invites`)
+      .set('Cookie', await ownerCookieOf(fixture))
+      .send({ email: 'newbie@example.com', role: 'member' })
+      .expect(201);
+    const token = String((invited.body as { link: string }).link).split('/invite/')[1];
+    const newbie = await createUser({ name: 'Newbie', email: 'newbie@example.com' });
+
+    const announced = nextEvent(watcher, 'members:updated');
+    await request(app)
+      .post(`/invites/${token}/accept`)
+      .set('Cookie', await accessCookieFor(newbie))
+      .expect(200);
+
+    const payload = boardEventSchemas['members:updated'].parse(await announced);
+    expect(payload).toMatchObject({ actorId: newbie.id });
+    expect(payload.members).toContainEqual({ id: newbie.id, name: 'Newbie', role: 'member' });
   });
 });
 

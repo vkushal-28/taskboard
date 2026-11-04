@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cardDtoSchema, listDtoSchema, objectIdSchema } from './boards.js';
+import { boardMemberDtoSchema, cardDtoSchema, listDtoSchema, objectIdSchema } from './boards.js';
 import { commentDtoSchema } from './comments.js';
 import type { Role } from './roles.js';
 
@@ -49,6 +49,8 @@ export const boardEventSchemas = {
     board: z.object({ id: z.string(), title: z.string(), color: z.string() }),
   }),
   'board:deleted': z.object(eventBase),
+  // After a join, a role change or a removal. A client that is no longer listed was removed.
+  'members:updated': z.object({ ...eventBase, members: z.array(boardMemberDtoSchema) }),
 } as const;
 
 export type BoardEventName = keyof typeof boardEventSchemas;

@@ -11,7 +11,9 @@ import { createAuthRouter } from './modules/auth/routes.js';
 import { createBoardsRouter } from './modules/boards/routes.js';
 import { createCardsRouter } from './modules/cards/routes.js';
 import { createCommentsRouter } from './modules/comments/routes.js';
+import { createInvitesRouter } from './modules/invites/routes.js';
 import { createListsRouter } from './modules/lists/routes.js';
+import { createMembersRouter } from './modules/members/routes.js';
 
 export function createApp() {
   const app = express();
@@ -35,6 +37,8 @@ export function createApp() {
   app.use(createCardsRouter());
   app.use(createCommentsRouter());
   app.use(createActivityRouter());
+  app.use(createMembersRouter());
+  app.use(createInvitesRouter());
 
   app.use(notFoundHandler);
   app.use(errorHandler);
