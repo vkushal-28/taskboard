@@ -16,6 +16,7 @@ export const activityTypeSchema = z.enum([
   'card.deleted',
   'comment.created',
   'member.invited',
+  'member.invite_revoked',
   'member.joined',
   'member.role_changed',
   'member.removed',

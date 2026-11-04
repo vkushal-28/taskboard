@@ -376,6 +376,41 @@ describe('membership changes', () => {
     expect(cardDraggingSchema.parse(await cue)).toMatchObject({ userId: viewer.id });
   });
 
+  it.each([
+    ['demoted to viewer', 'patch'],
+    ['removed', 'delete'],
+  ] as const)('ends the drag of a member who is %s mid-drag', async (_name, method) => {
+    const fixture = await createBoardWithRoles();
+    const { board, owner, member } = fixture;
+    const card = await createCard(await createList(board._id));
+    const watcher = await connectedAs(owner);
+    await join(watcher, { boardId: board.id });
+    const dragger = await connectedAs(member);
+    await join(dragger, { boardId: board.id });
+    const started = nextSignal(watcher, CARD_DRAGGING);
+    dragger.emit(CARD_DRAG, { boardId: board.id, cardId: card.id });
+    await started;
+
+    const ended = nextSignal(
+      watcher,
+      CARD_DRAGGING,
+      (payload) => cardDraggingSchema.safeParse(payload).data?.cardId === null,
+    );
+    const path = `/boards/${board.id}/members/${member.id}`;
+    const cookie = await ownerCookieOf(fixture);
+    if (method === 'patch') {
+      await request(app).patch(path).set('Cookie', cookie).send({ role: 'viewer' }).expect(200);
+    } else {
+      await request(app).delete(path).set('Cookie', cookie).expect(200);
+    }
+
+    expect(cardDraggingSchema.parse(await ended)).toEqual({
+      boardId: board.id,
+      userId: member.id,
+      cardId: null,
+    });
+  });
+
   it('announces a new member who accepted an invite', async () => {
     const fixture = await createBoardWithRoles();
     const { board, owner } = fixture;

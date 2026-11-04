@@ -52,6 +52,8 @@ Invites, role changes and removals are owner only. A board always keeps at least
 
 **Invite links** (`GET /invites/:token`, `POST /invites/:token/accept`) aren't board-scoped: they need a signed-in user whose email matches the invite, otherwise 403 `INVITE_WRONG_ACCOUNT`. An unknown token gets 404 `INVITE_NOT_FOUND`; a revoked, used or expired one gets 410 `INVITE_REVOKED`, `INVITE_USED` or `INVITE_EXPIRED`. An invite grants `member` or `viewer`, never `owner`.
 
+Creating and resending invites send email, so together they're limited to 20 per user per 15 minutes (429 `TOO_MANY_REQUESTS`).
+
 ## Socket events (Phase 4)
 
 Sockets are read-only. Every write goes through REST and the routes above; the service broadcasts the result to the board room only after the DB write succeeds.

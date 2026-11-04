@@ -1,5 +1,7 @@
 import {
   boardRoom,
+  CARD_DRAGGING,
+  hasRole,
   PRESENCE_UPDATE,
   type BoardEventName,
   type BoardEventPayload,
@@ -97,6 +99,12 @@ export async function syncMemberSockets(
     const theirs = sockets.filter((socket) => socket.data.userId === userId);
     if (theirs.length === 0) return;
     for (const socket of theirs) {
+      // A drag they can no longer finish (a viewer's drop is ignored, a removed user can't
+      // send one) would leave "<name> is moving this" on everyone else's screen.
+      if (socket.data.dragging?.boardId === boardId && (!role || !hasRole(role, 'member'))) {
+        io.to(room).emit(CARD_DRAGGING, { boardId, userId, cardId: null });
+        socket.data.dragging = null;
+      }
       if (role) {
         socket.data.boards[boardId] = role;
         continue;

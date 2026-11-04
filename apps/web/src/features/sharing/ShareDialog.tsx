@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createInviteSchema,
+  roleSchema,
   ROLES,
   type BoardDetail,
   type BoardMemberDto,
@@ -216,9 +217,10 @@ function MemberRow({
         aria-label={`Role for ${member.name}`}
         value={member.role}
         disabled={busy}
-        onChange={(event) =>
-          changeRole.mutate({ userId: member.id, role: event.target.value as Role })
-        }
+        onChange={(event) => {
+          const role = roleSchema.safeParse(event.target.value);
+          if (role.success) changeRole.mutate({ userId: member.id, role: role.data });
+        }}
         className="rounded-md border border-slate-300 px-2 py-1 text-sm disabled:opacity-60"
       >
         {ROLES.map((role) => (

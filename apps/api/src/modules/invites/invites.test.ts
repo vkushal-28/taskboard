@@ -16,7 +16,9 @@ import {
   parseBody,
 } from '../../../test/factories.js';
 import { createApp } from '../../app.js';
+import { ActivityModel } from '../activity/model.js';
 import { InviteModel } from './model.js';
+import { INVITE_EMAILS_PER_WINDOW } from './routes.js';
 
 let app: ReturnType<typeof createApp>;
 beforeEach(() => {
@@ -124,6 +126,39 @@ describe('POST /boards/:boardId/invites', () => {
       { expiresAt: new Date(Date.now() - 1000) },
     );
     expect((await again()).status).toBe(201);
+  });
+});
+
+describe('invite email limit', () => {
+  it('caps create and resend together per user, then answers 429', async () => {
+    const s = await setup();
+    const first = await invite(s, { email: 'a0@example.com' });
+    // One budget for both routes: the create above plus resends fill it.
+    for (let sent = 1; sent < INVITE_EMAILS_PER_WINDOW; sent += 1) {
+      await request(app)
+        .post(`/boards/${s.board.id}/invites/${first.invite.id}/resend`)
+        .set('Cookie', s.ownerCookie)
+        .expect(200);
+    }
+
+    const resend = await request(app)
+      .post(`/boards/${s.board.id}/invites/${first.invite.id}/resend`)
+      .set('Cookie', s.ownerCookie);
+    const create = await request(app)
+      .post(`/boards/${s.board.id}/invites`)
+      .set('Cookie', s.ownerCookie)
+      .send({ email: 'late@example.com' });
+
+    expectError(resend, 429, 'TOO_MANY_REQUESTS');
+    expectError(create, 429, 'TOO_MANY_REQUESTS');
+    // Another owner has their own budget.
+    const other = await createUser();
+    const otherBoard = await createBoard(other);
+    const theirs = await request(app)
+      .post(`/boards/${otherBoard.id}/invites`)
+      .set('Cookie', await accessCookieFor(other))
+      .send({ email: 'late@example.com' });
+    expect(theirs.status).toBe(201);
   });
 });
 
@@ -263,6 +298,19 @@ describe('accepting an invite', () => {
   });
 });
 
+it('retires an expired invite when the same email is invited again', async () => {
+  const s = await setup();
+  const old = await invite(s);
+  await InviteModel.updateOne({ _id: old.invite.id }, { expiresAt: new Date(Date.now() - 1000) });
+
+  const fresh = await invite(s);
+
+  const res = await request(app).get(`/boards/${s.board.id}/invites`).set('Cookie', s.ownerCookie);
+  const ids = parseBody(inviteListResponseSchema, res).invites.map((item) => item.id);
+  expect(ids).toEqual([fresh.invite.id]);
+  expectError(await accept(s.inviteeCookie, old.token), 410, 'INVITE_REVOKED');
+});
+
 describe('resend and revoke', () => {
   it('resending replaces the link: the old one stops working, the new one works', async () => {
     const s = await setup();
@@ -277,6 +325,19 @@ describe('resend and revoke', () => {
     expect(token).not.toBe(first.token);
     expectError(await accept(s.inviteeCookie, first.token), 404, 'INVITE_NOT_FOUND');
     expect((await accept(s.inviteeCookie, token)).status).toBe(200);
+  });
+
+  it('logs a revoke', async () => {
+    const s = await setup();
+    const { invite: dto } = await invite(s);
+
+    await request(app)
+      .delete(`/boards/${s.board.id}/invites/${dto.id}`)
+      .set('Cookie', s.ownerCookie)
+      .expect(204);
+
+    const logged = await ActivityModel.findOne({ type: 'member.invite_revoked' }).lean();
+    expect(logged).toMatchObject({ actorId: s.owner._id, meta: { inviteId: dto.id } });
   });
 
   it('resending revives an expired invite', async () => {

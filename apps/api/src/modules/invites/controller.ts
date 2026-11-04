@@ -31,7 +31,11 @@ export const resendInvite: RequestHandler = async (req, res) => {
 };
 
 export const revokeInvite: RequestHandler = async (req, res) => {
-  await invitesService.revokeInvite(getBoardContext(req).boardId, inviteParam(req.params));
+  await invitesService.revokeInvite(
+    getBoardContext(req).boardId,
+    getAuthUserId(req),
+    inviteParam(req.params),
+  );
   res.status(204).end();
 };
 

@@ -62,10 +62,16 @@ export async function createInvite(
   ) {
     throw new Conflict(`${email} is already a member of this board`, 'ALREADY_MEMBER');
   }
-  // Expired invites don't block a new one; the owner may also resend them.
-  if (await InviteModel.exists({ boardId, email, ...PENDING, expiresAt: { $gt: new Date() } })) {
+  const now = new Date();
+  if (await InviteModel.exists({ boardId, email, ...PENDING, expiresAt: { $gt: now } })) {
     throw new Conflict(`${email} already has a pending invite`, 'ALREADY_INVITED');
   }
+  // An expired invite doesn't block a new one, but it would stay in the pending list next to
+  // it, so it's retired here.
+  await InviteModel.updateMany(
+    { boardId, email, ...PENDING, expiresAt: { $lte: now } },
+    { $set: { revokedAt: now } },
+  );
 
   const { token, tokenHash } = issueToken();
   const invite = await InviteModel.create({
@@ -101,12 +107,19 @@ export async function resendInvite(
   return deliver(boardId, actorId, invite, token);
 }
 
-export async function revokeInvite(boardId: string, inviteId: string): Promise<void> {
+// Invite changes are logged but not broadcast: the board room includes viewers, and the
+// pending list holds email addresses only owners should see.
+export async function revokeInvite(
+  boardId: string,
+  actorId: string,
+  inviteId: string,
+): Promise<void> {
   const revoked = await InviteModel.updateOne(
     { _id: inviteId, boardId, ...PENDING },
     { $set: { revokedAt: new Date() } },
   );
   if (revoked.matchedCount === 0) throw new NotFound('Invite not found');
+  await logActivity({ boardId, actorId, type: 'member.invite_revoked', meta: { inviteId } });
 }
 
 export async function previewInvite(token: string, userId: string): Promise<InvitePreview> {
