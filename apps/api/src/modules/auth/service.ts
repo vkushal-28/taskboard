@@ -104,6 +104,19 @@ export async function logout(refreshToken: string | undefined): Promise<void> {
   if (existing) await revokeFamily(existing.familyId, new Date());
 }
 
+/**
+ * True while the session (refresh family) still holds a token that is neither revoked nor
+ * expired. Logout and reuse detection revoke every token, so the family stops being active.
+ */
+export async function isSessionActive(familyId: string): Promise<boolean> {
+  const active = await RefreshTokenModel.exists({
+    familyId,
+    revokedAt: null,
+    expiresAt: { $gt: new Date() },
+  });
+  return active !== null;
+}
+
 export async function getCurrentUser(userId: string): Promise<PublicUser> {
   const user = await UserModel.findById(userId);
   if (!user) throw new Unauthorized('User no longer exists');

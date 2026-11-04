@@ -19,7 +19,8 @@ Tie every socket to the session (refresh family) that opened it, and disconnect 
 1. Access tokens carry a `sid` claim with the refresh family id. A token without one is invalid (REST and handshake).
 2. On connection, a socket joins the server-only room `session:<sid>`.
 3. `revokeFamily()` calls `disconnectSession(familyId)` after its DB write, which runs `io.in('session:<sid>').disconnectSockets(true)`. Like `emitToBoard`, it never throws.
-4. The web client treats the `io server disconnect` reason as "the session may be gone": it calls `recoverSession()`, which signs the tab out if the refresh fails, or reconnects if it succeeds.
+4. Revoking does not end the access token: it stays valid for up to 15 minutes, so the handshake alone would let a revoked session open a new socket (which then stays open, since there is no expiry disconnect). On connection the server therefore joins the session room first and then checks that the family still has an active refresh token (`isSessionActive`, one indexed query). If not, it disconnects the socket. Messages wait for that answer. Checking after the join closes the race with a revoke that lands mid-handshake: a revoke before the read is seen by it, one after it reaches the room.
+5. The web client treats the `io server disconnect` reason as "the session may be gone": it calls `recoverSession()`, which signs the tab out if the refresh fails, or reconnects if it succeeds.
 
 Expiry-based disconnects stay out, for the reason ADR 010 gives (every user would reconnect every 15 minutes).
 
@@ -32,5 +33,5 @@ Expiry-based disconnects stay out, for the reason ADR 010 gives (every user woul
 ## Consequences
 
 - Good: a revoked session loses its live feed at once, including a thief's. Other tabs of a signed-out browser go to the sign-in page right away. Other sessions of the same user are untouched.
-- Bad / tradeoffs: the access token grows by one claim, and the family id is visible to anyone who holds the token (it is random and grants nothing on its own). Tokens issued before this change are rejected; nothing was deployed yet, so no one is signed out by it.
+- Bad / tradeoffs: one extra query per socket connection. During a refresh the family has no active token for one insert; a socket connecting in that instant is disconnected, refreshes, and reconnects. The access token grows by one claim, and the family id is visible to anyone who holds the token (it is random and grants nothing on its own). Tokens issued before this change are rejected; nothing was deployed yet, so no one is signed out by it.
 - Follow-ups: a password change or "sign out everywhere" (not built) would revoke every family of the user and should call `disconnectSession` for each.

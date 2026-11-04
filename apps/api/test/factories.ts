@@ -8,7 +8,13 @@ import type { HydratedDocument, Types } from 'mongoose';
 import { z } from 'zod';
 import { ACCESS_COOKIE } from '../src/modules/auth/cookies.js';
 import { positionBetween } from '../src/lib/position.js';
-import { signAccessToken } from '../src/modules/auth/tokens.js';
+import { RefreshTokenModel } from '../src/modules/auth/model.js';
+import {
+  generateRefreshToken,
+  hashRefreshToken,
+  REFRESH_TOKEN_TTL_MS,
+  signAccessToken,
+} from '../src/modules/auth/tokens.js';
 import { BoardModel } from '../src/modules/boards/model.js';
 import { CardModel } from '../src/modules/cards/model.js';
 import { ListModel } from '../src/modules/lists/model.js';
@@ -42,12 +48,17 @@ export async function loginAs(app: Express, email: string, password = DEFAULT_PA
 
 /**
  * A `Cookie` header value that authenticates as `user`, for apps without the auth routes.
- * Each call is a new session unless `sessionId` names one.
+ * Each call starts a new active session (a refresh family with one live token), because
+ * sockets refuse sessions that are not active (ADR 016).
  */
-export async function accessCookieFor(
-  user: HydratedDocument<User>,
-  sessionId: string = randomUUID(),
-): Promise<string> {
+export async function accessCookieFor(user: HydratedDocument<User>): Promise<string> {
+  const sessionId = randomUUID();
+  await RefreshTokenModel.create({
+    userId: user._id,
+    familyId: sessionId,
+    tokenHash: hashRefreshToken(generateRefreshToken()),
+    expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+  });
   return `${ACCESS_COOKIE}=${await signAccessToken(user.id, sessionId)}`;
 }
 

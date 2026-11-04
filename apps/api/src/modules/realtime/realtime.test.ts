@@ -158,10 +158,14 @@ describe('session end', () => {
     const access = cookieValue(getCookie(res, ACCESS_COOKIE));
     const refresh = cookieValue(getCookie(res, REFRESH_COOKIE));
     if (!access || !refresh) throw new Error('login did not set both cookies');
-    const socket = open({ cookie: `${ACCESS_COOKIE}=${access}`, origin: CLIENT_ORIGIN });
+    const cookie = `${ACCESS_COOKIE}=${access}`;
+    const socket = open({ cookie, origin: CLIENT_ORIGIN });
     expect(await connectResult(socket)).toEqual({ connected: true });
-    return { socket, refresh };
+    return { socket, refresh, cookie };
   }
+
+  const logout = (refresh: string) =>
+    request(app).post('/auth/logout').set('Cookie', `${REFRESH_COOKIE}=${refresh}`).expect(204);
 
   function serverDisconnect(socket: ClientSocket): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -187,6 +191,60 @@ describe('session end', () => {
     expect(await closed).toBe('io server disconnect');
     await roundTrip(phone.socket);
     expect(phone.socket.connected).toBe(true);
+  });
+
+  it("closes a new socket opened with a revoked session's still-valid access token", async () => {
+    const { board, member } = await createBoardWithRoles();
+    const session = await signIn(member.email);
+    const closedFirst = serverDisconnect(session.socket);
+    await logout(session.refresh);
+    await closedFirst;
+
+    // The access token is still inside its 15 minutes, so the handshake itself passes.
+    const again = open({ cookie: session.cookie, origin: CLIENT_ORIGIN });
+    const closed = serverDisconnect(again);
+    expect(await connectResult(again)).toEqual({ connected: true });
+    again.emit(BOARD_JOIN, { boardId: board.id }, () => undefined);
+
+    expect(await closed).toBe('io server disconnect');
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('closes a socket whose session is revoked while its session check is reading', async () => {
+    const user = await createUser();
+    const session = await signIn(user.email);
+    const exists = RefreshTokenModel.exists.bind(RefreshTokenModel);
+    vi.spyOn(RefreshTokenModel, 'exists').mockImplementationOnce(
+      (...args: Parameters<typeof exists>) => {
+        const query = exists(...args);
+        const exec = query.exec.bind(query);
+        query.exec = async () => {
+          const result = await exec();
+          await logout(session.refresh);
+          return result;
+        };
+        return query;
+      },
+    );
+
+    const racing = open({ cookie: session.cookie, origin: CLIENT_ORIGIN });
+    const closed = serverDisconnect(racing);
+
+    expect(await closed).toBe('io server disconnect');
+  });
+
+  it('keeps a socket whose session rotated: the family is still active', async () => {
+    const user = await createUser();
+    const session = await signIn(user.email);
+    await request(app)
+      .post('/auth/refresh')
+      .set('Cookie', `${REFRESH_COOKIE}=${session.refresh}`)
+      .expect(204);
+
+    const later = open({ cookie: session.cookie, origin: CLIENT_ORIGIN });
+    expect(await connectResult(later)).toEqual({ connected: true });
+    await roundTrip(later);
+    expect(later.connected).toBe(true);
   });
 
   it('disconnects every socket of a session revoked for refresh token reuse', async () => {
@@ -241,6 +299,30 @@ describe('board:join', () => {
 
     const ack = await join(socket, { boardId: board.id });
 
+    expect(ack).toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } });
+    expect(await userIdsInRoom(board.id)).toEqual([]);
+  });
+
+  it('leaves the room again when the role check after joining fails', async () => {
+    const { board, member } = await createBoardWithRoles();
+    const socket = await connectedAs(member);
+    const findOne = BoardModel.findOne.bind(BoardModel);
+    let lookups = 0;
+    vi.spyOn(BoardModel, 'findOne').mockImplementation((...args: Parameters<typeof findOne>) => {
+      const filter: unknown = args[0];
+      const isLookup =
+        typeof filter === 'object' &&
+        filter !== null &&
+        'members.userId' in filter &&
+        String(filter['members.userId']) === member.id;
+      // The second lookup is the one after socket.join.
+      if (isLookup && ++lookups === 2) throw new Error('database unavailable');
+      return findOne(...args);
+    });
+
+    const ack = await join(socket, { boardId: board.id });
+
+    expect(lookups).toBe(2);
     expect(ack).toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } });
     expect(await userIdsInRoom(board.id)).toEqual([]);
   });
