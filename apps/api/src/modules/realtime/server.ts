@@ -8,22 +8,21 @@ import {
   CARD_DRAGGING,
   cardDragSchema,
   hasRole,
+  socketTicketSchema,
   type BoardJoinAck,
 } from '@taskboard/shared';
-import cookieParser from 'cookie-parser';
 import { Server, type Socket } from 'socket.io';
 import { env } from '../../config/env.js';
 import { AppError, Unauthorized } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { findMemberRole } from '../boards/access.js';
-import { ACCESS_COOKIE, readCookie } from '../auth/cookies.js';
 import { isSessionActive } from '../auth/service.js';
-import { verifyAccessToken, type AccessClaims } from '../auth/tokens.js';
 import {
   broadcastPresence as broadcastPresenceFor,
   sessionRoom,
   type RealtimeServer,
 } from './emitter.js';
+import { redeemTicket, type TicketClaims } from './ticket-service.js';
 import { createMessageLimiter, SOCKET_MESSAGE_LIMIT, type MessageLimit } from './rate-limit.js';
 
 type RealtimeSocket =
@@ -43,22 +42,19 @@ export function createRealtimeServer(
   const clientOrigin = new URL(env.CLIENT_URL).origin;
 
   const io: RealtimeServer = new Server(httpServer, {
-    cors: { origin: clientOrigin, credentials: true },
-    // CORS does not cover WebSocket upgrades and the browser still sends our cookie, so a
-    // foreign page could open a socket as the user (cross-site WebSocket hijacking). Reject
-    // any handshake whose Origin is not the web app. No Origin means a non-browser client,
-    // which has no victim's cookies to borrow, the same rule as requireSameOrigin.
+    cors: { origin: clientOrigin },
+    // Sockets log in with a ticket, not the cookie (ADR 018), and a foreign page can't get a
+    // ticket: the ticket endpoint needs the cookie and passes the same Origin check as every
+    // write. This check stays as a second wall against cross-site socket hijacking. No Origin
+    // means a non-browser client, the same rule as requireSameOrigin.
     allowRequest: (req, callback) => {
       const origin = req.headers.origin;
       callback(null, origin === undefined || origin === clientOrigin);
     },
   });
 
-  // Runs the same cookie-parser as the REST app on the handshake request.
-  io.engine.use(cookieParser());
-
   io.use((socket, next) => {
-    authenticate(socket.request)
+    authenticate(socket.handshake.auth)
       .then(({ userId, sessionId }) => {
         socket.data = { userId, sessionId, boards: {}, dragging: null };
         next();
@@ -195,19 +191,25 @@ export function createRealtimeServer(
   return io;
 }
 
-/** The user and session from the handshake's access-token cookie, or Unauthorized. */
-async function authenticate(handshake: object): Promise<AccessClaims> {
-  const token = readCookie(handshake, ACCESS_COOKIE);
-  if (!token) throw new Unauthorized();
-  return verifyAccessToken(token);
+/**
+ * The user and session behind the handshake's ticket, or Unauthorized. The socket goes to the
+ * api's own address, where the browser has no login cookie, so it brings a single-use ticket
+ * it fetched over REST (ADR 018). Each ticket opens one socket.
+ */
+async function authenticate(auth: Record<string, unknown>): Promise<TicketClaims> {
+  const parsed = socketTicketSchema.safeParse(auth);
+  if (!parsed.success) throw new Unauthorized();
+  const claims = await redeemTicket(parsed.data.ticket);
+  if (!claims) throw new Unauthorized('Socket ticket is invalid, used or expired');
+  return claims;
 }
 
 function failure(code: string, message: string): BoardJoinAck {
   return { ok: false, error: { code, message } };
 }
 
-// The client reads `err.data.code` in its `connect_error` handler. UNAUTHORIZED (missing,
-// invalid or expired access token) means: refresh the session, then reconnect.
+// The client reads `err.data.code` in its `connect_error` handler. UNAUTHORIZED (a missing,
+// used or expired ticket) means: refresh the session, then reconnect with a new ticket.
 function toConnectError(err: unknown): Error & { data: { code: string } } {
   const code = err instanceof AppError && err.status === 401 ? err.code : 'UNAUTHORIZED';
   if (!(err instanceof AppError)) logger.error({ err }, 'socket handshake failed');

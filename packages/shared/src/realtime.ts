@@ -10,6 +10,13 @@ export function boardRoom(boardId: string): string {
 
 // Client -> server
 
+/**
+ * A single-use, 30-second ticket that opens one socket (ADR 018). The socket goes to the api
+ * directly, where the browser has no login cookie, so it proves who it is with this instead.
+ */
+export const socketTicketSchema = z.object({ ticket: z.string().min(1) });
+export type SocketTicket = z.infer<typeof socketTicketSchema>;
+
 export const BOARD_JOIN = 'board:join';
 export const BOARD_LEAVE = 'board:leave';
 

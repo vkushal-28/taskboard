@@ -52,6 +52,8 @@ Invites, role changes and removals are owner only. A board always keeps at least
 
 **Invite links** (`GET /invites/:token`, `POST /invites/:token/accept`) aren't board-scoped: they need a signed-in user whose email matches the invite, otherwise 403 `INVITE_WRONG_ACCOUNT`. An unknown token gets 404 `INVITE_NOT_FOUND`; a revoked, used or expired one gets 410 `INVITE_REVOKED`, `INVITE_USED` or `INVITE_EXPIRED`. An invite grants `member` or `viewer`, never `owner`.
 
+**Socket tickets** (`POST /realtime/ticket`) aren't board-scoped either: any signed-in user gets a single-use ticket for their own session (30 s, at most 30 a minute), and a write from a foreign `Origin` gets 403 like every write. The ticket only opens a socket; board access is still checked by `board:join` (ADR 018).
+
 Creating and resending invites send email, so together they're limited to 20 per user per 15 minutes (429 `TOO_MANY_REQUESTS`).
 
 ## Socket events (Phase 4)

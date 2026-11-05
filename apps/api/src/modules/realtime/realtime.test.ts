@@ -8,13 +8,13 @@ import {
   cardDraggingSchema,
   PRESENCE_UPDATE,
   presenceUpdateSchema,
+  socketTicketSchema,
   boardEventSchemas,
   type BoardEventName,
   type BoardJoinAck,
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from '@taskboard/shared';
-import { SignJWT } from 'jose';
 import { io as connect, type Socket } from 'socket.io-client';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -27,6 +27,7 @@ import {
   createUser,
   DEFAULT_PASSWORD,
   getCookie,
+  parseBody,
 } from '../../../test/factories.js';
 import { createApp } from '../../app.js';
 import { ACCESS_COOKIE, REFRESH_COOKIE } from '../auth/cookies.js';
@@ -34,6 +35,8 @@ import { RefreshTokenModel } from '../auth/model.js';
 import { REFRESH_REUSE_GRACE_MS } from '../auth/service.js';
 import { hashRefreshToken } from '../auth/tokens.js';
 import { BoardModel } from '../boards/model.js';
+import { SOCKET_TICKETS_PER_MINUTE } from './routes.js';
+import { SocketTicketModel } from './ticket-model.js';
 import { emitToBoard, setRealtimeServer, type RealtimeServer } from './emitter.js';
 import { createRealtimeServer } from './server.js';
 
@@ -66,11 +69,21 @@ afterAll(async () => {
   await io.close();
 });
 
-function open(headers: Record<string, string>): ClientSocket {
-  const socket: ClientSocket = connect(url, {
+/** A socket ticket fetched over REST with this login cookie, the way the web app does it. */
+async function ticketFor(cookie: string): Promise<string> {
+  const res = await request(app).post('/realtime/ticket').set('Cookie', cookie).expect(201);
+  return parseBody(socketTicketSchema, res).ticket;
+}
+
+function open(
+  { ticket, origin = CLIENT_ORIGIN }: { ticket?: string; origin?: string } = {},
+  target = url,
+): ClientSocket {
+  const socket: ClientSocket = connect(target, {
     transports: ['websocket'],
     reconnection: false,
-    extraHeaders: headers,
+    auth: ticket === undefined ? {} : { ticket },
+    extraHeaders: { origin },
   });
   openSockets.push(socket);
   return socket;
@@ -92,7 +105,7 @@ function connectResult(socket: ClientSocket): Promise<{ connected: true } | { co
 }
 
 async function connectedAs(user: Parameters<typeof accessCookieFor>[0]): Promise<ClientSocket> {
-  const socket = open({ cookie: await accessCookieFor(user), origin: CLIENT_ORIGIN });
+  const socket = open({ ticket: await ticketFor(await accessCookieFor(user)) });
   expect(await connectResult(socket)).toEqual({ connected: true });
   return socket;
 }
@@ -114,37 +127,85 @@ function nextEvent<E extends BoardEventName>(socket: ClientSocket, event: E): Pr
   });
 }
 
-describe('socket handshake', () => {
-  it('rejects a connection without an access cookie', async () => {
-    const socket = open({ origin: CLIENT_ORIGIN });
-    expect(await connectResult(socket)).toEqual({ code: 'UNAUTHORIZED' });
+describe('POST /realtime/ticket', () => {
+  it('needs a login', async () => {
+    const res = await request(app).post('/realtime/ticket');
+    expect(res.status).toBe(401);
   });
 
-  it('rejects an invalid access token', async () => {
-    const socket = open({ cookie: 'tb_access=not-a-jwt', origin: CLIENT_ORIGIN });
-    expect(await connectResult(socket)).toEqual({ code: 'UNAUTHORIZED' });
-  });
-
-  it('rejects a handshake from a foreign origin, even with a valid cookie', async () => {
+  it('refuses a foreign origin, like every write', async () => {
     const user = await createUser();
-    const socket = open({ cookie: await accessCookieFor(user), origin: 'https://evil.example' });
-    const result = await connectResult(socket);
-    expect(result).not.toEqual({ connected: true });
+    const res = await request(app)
+      .post('/realtime/ticket')
+      .set('Cookie', await accessCookieFor(user))
+      .set('Origin', 'https://evil.example');
+    expect(res.status).toBe(403);
   });
 
-  it('accepts a valid cookie from the web app origin', async () => {
+  it('stores only a hash of the ticket, for this user and session', async () => {
+    const user = await createUser();
+    const ticket = await ticketFor(await accessCookieFor(user));
+
+    const stored = await SocketTicketModel.find().lean();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.userId.toString()).toBe(user.id);
+    expect(JSON.stringify(stored)).not.toContain(ticket);
+  });
+
+  it('limits how many tickets one user can ask for', async () => {
+    const cookie = await accessCookieFor(await createUser());
+    for (let i = 0; i < SOCKET_TICKETS_PER_MINUTE; i++) await ticketFor(cookie);
+
+    const res = await request(app).post('/realtime/ticket').set('Cookie', cookie);
+    expect(res.status).toBe(429);
+  });
+});
+
+describe('socket handshake', () => {
+  it('rejects a connection without a ticket', async () => {
+    const socket = open();
+    expect(await connectResult(socket)).toEqual({ code: 'UNAUTHORIZED' });
+  });
+
+  it('rejects an unknown ticket', async () => {
+    const socket = open({ ticket: 'not-a-real-ticket' });
+    expect(await connectResult(socket)).toEqual({ code: 'UNAUTHORIZED' });
+  });
+
+  it('no longer accepts the login cookie on its own (ADR 018)', async () => {
+    const user = await createUser();
+    const socket: ClientSocket = connect(url, {
+      transports: ['websocket'],
+      reconnection: false,
+      extraHeaders: { cookie: await accessCookieFor(user), origin: CLIENT_ORIGIN },
+    });
+    openSockets.push(socket);
+    expect(await connectResult(socket)).toEqual({ code: 'UNAUTHORIZED' });
+  });
+
+  it('rejects a handshake from a foreign origin, even with a valid ticket', async () => {
+    const user = await createUser();
+    const ticket = await ticketFor(await accessCookieFor(user));
+    const socket = open({ ticket, origin: 'https://evil.example' });
+    expect(await connectResult(socket)).not.toEqual({ connected: true });
+  });
+
+  it('accepts a valid ticket from the web app origin', async () => {
     await connectedAs(await createUser());
   });
 
-  it('rejects an access token without a session id', async () => {
-    const user = await createUser();
-    const noSession = await new SignJWT()
-      .setProtectedHeader({ alg: 'HS256' })
-      .setSubject(user.id)
-      .setExpirationTime('15m')
-      .sign(new TextEncoder().encode(process.env.JWT_ACCESS_SECRET));
-    const socket = open({ cookie: `${ACCESS_COOKIE}=${noSession}`, origin: CLIENT_ORIGIN });
-    expect(await connectResult(socket)).toEqual({ code: 'UNAUTHORIZED' });
+  it('opens one socket per ticket', async () => {
+    const ticket = await ticketFor(await accessCookieFor(await createUser()));
+    expect(await connectResult(open({ ticket }))).toEqual({ connected: true });
+
+    expect(await connectResult(open({ ticket }))).toEqual({ code: 'UNAUTHORIZED' });
+  });
+
+  it('rejects an expired ticket', async () => {
+    const ticket = await ticketFor(await accessCookieFor(await createUser()));
+    await SocketTicketModel.updateMany({}, { expiresAt: new Date(Date.now() - 1_000) });
+
+    expect(await connectResult(open({ ticket }))).toEqual({ code: 'UNAUTHORIZED' });
   });
 });
 
@@ -159,7 +220,7 @@ describe('session end', () => {
     const refresh = cookieValue(getCookie(res, REFRESH_COOKIE));
     if (!access || !refresh) throw new Error('login did not set both cookies');
     const cookie = `${ACCESS_COOKIE}=${access}`;
-    const socket = open({ cookie, origin: CLIENT_ORIGIN });
+    const socket = open({ ticket: await ticketFor(cookie) });
     expect(await connectResult(socket)).toEqual({ connected: true });
     return { socket, refresh, cookie };
   }
@@ -200,8 +261,9 @@ describe('session end', () => {
     await logout(session.refresh);
     await closedFirst;
 
-    // The access token is still inside its 15 minutes, so the handshake itself passes.
-    const again = open({ cookie: session.cookie, origin: CLIENT_ORIGIN });
+    // The access token is still inside its 15 minutes, so it still gets a ticket, and the
+    // handshake itself passes.
+    const again = open({ ticket: await ticketFor(session.cookie) });
     const closed = serverDisconnect(again);
     expect(await connectResult(again)).toEqual({ connected: true });
     again.emit(BOARD_JOIN, { boardId: board.id }, () => undefined);
@@ -213,6 +275,7 @@ describe('session end', () => {
   it('closes a socket whose session is revoked while its session check is reading', async () => {
     const user = await createUser();
     const session = await signIn(user.email);
+    const ticket = await ticketFor(session.cookie);
     const exists = RefreshTokenModel.exists.bind(RefreshTokenModel);
     vi.spyOn(RefreshTokenModel, 'exists').mockImplementationOnce(
       (...args: Parameters<typeof exists>) => {
@@ -227,7 +290,7 @@ describe('session end', () => {
       },
     );
 
-    const racing = open({ cookie: session.cookie, origin: CLIENT_ORIGIN });
+    const racing = open({ ticket });
     const closed = serverDisconnect(racing);
 
     expect(await closed).toBe('io server disconnect');
@@ -241,7 +304,7 @@ describe('session end', () => {
       .set('Cookie', `${REFRESH_COOKIE}=${session.refresh}`)
       .expect(204);
 
-    const later = open({ cookie: session.cookie, origin: CLIENT_ORIGIN });
+    const later = open({ ticket: await ticketFor(session.cookie) });
     expect(await connectResult(later)).toEqual({ connected: true });
     await roundTrip(later);
     expect(later.connected).toBe(true);
@@ -905,12 +968,7 @@ describe('socket message limit', () => {
     await new Promise<void>((resolve) => limitedHttp.listen(0, resolve));
     const limitedUrl = `http://localhost:${(limitedHttp.address() as AddressInfo).port}`;
     const connectTo = async (user: Parameters<typeof accessCookieFor>[0]) => {
-      const socket: ClientSocket = connect(limitedUrl, {
-        transports: ['websocket'],
-        reconnection: false,
-        extraHeaders: { cookie: await accessCookieFor(user), origin: CLIENT_ORIGIN },
-      });
-      openSockets.push(socket);
+      const socket = open({ ticket: await ticketFor(await accessCookieFor(user)) }, limitedUrl);
       expect(await connectResult(socket)).toEqual({ connected: true });
       return socket;
     };

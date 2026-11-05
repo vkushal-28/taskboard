@@ -14,7 +14,24 @@ describe('parseEnv', () => {
       JWT_ACCESS_SECRET: SECRET,
       CLIENT_URL: 'http://localhost:5173',
       COOKIE_SECURE: false,
+      API_PUBLIC_PATH: '',
+      TRUST_PROXY: 0,
     });
+  });
+
+  it('accepts a public api path and a proxy hop count', () => {
+    expect(parseEnv({ ...required, API_PUBLIC_PATH: '/api', TRUST_PROXY: '2' })).toMatchObject({
+      API_PUBLIC_PATH: '/api',
+      TRUST_PROXY: 2,
+    });
+  });
+
+  it.each(['api', '/api/', 'https://x.dev/api'])('rejects API_PUBLIC_PATH %s', (path) => {
+    expect(() => parseEnv({ ...required, API_PUBLIC_PATH: path })).toThrow(/API_PUBLIC_PATH/);
+  });
+
+  it.each(['-1', '1.5', 'yes'])('rejects TRUST_PROXY %s', (hops) => {
+    expect(() => parseEnv({ ...required, TRUST_PROXY: hops })).toThrow(/TRUST_PROXY/);
   });
 
   it('coerces PORT from a string', () => {

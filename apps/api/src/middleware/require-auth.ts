@@ -6,9 +6,17 @@ import { verifyAccessToken } from '../modules/auth/tokens.js';
 export const requireAuth: RequestHandler = async (req, _res, next) => {
   const token = readCookie(req, ACCESS_COOKIE);
   if (!token) throw new Unauthorized();
-  req.userId = (await verifyAccessToken(token)).userId;
+  const { userId, sessionId } = await verifyAccessToken(token);
+  req.userId = userId;
+  req.sessionId = sessionId;
   next();
 };
+
+/** The session requireAuth found in the access token (ADR 016). */
+export function getAuthSessionId(req: Request): string {
+  if (!req.sessionId) throw new Unauthorized();
+  return req.sessionId;
+}
 
 export function getAuthUserId(req: Request): string {
   if (!req.userId) throw new Unauthorized();

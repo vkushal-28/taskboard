@@ -1,6 +1,6 @@
 # ADR 010: Socket authentication with the access cookie and an Origin check
 
-- **Status:** Accepted
+- **Status:** Accepted; the cookie handshake (decision 1) is superseded by ADR 018 (socket tickets)
 - **Date:** 2026-11-03
 
 ## Context

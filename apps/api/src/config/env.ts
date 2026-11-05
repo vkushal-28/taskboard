@@ -17,6 +17,17 @@ const envSchema = z
     // Defaults to on in production. The Docker stack runs production builds over
     // http://localhost, where Safari drops Secure cookies, so it turns this off.
     COOKIE_SECURE: z.stringbool().optional(),
+    // The path the browser uses to reach the api, when a proxy serves it under the web app's
+    // own address (Vercel forwards /api/* to Render, ADR 018). It scopes the refresh cookie,
+    // which the browser only sends to `${API_PUBLIC_PATH}/auth`. Empty when called directly.
+    API_PUBLIC_PATH: z
+      .string()
+      .regex(/^(\/[\w-]+)*$/, 'must be empty or a path like /api, without a trailing slash')
+      .default(''),
+    // How many proxies sit in front of the api (Express `trust proxy`). With it, rate limits
+    // key on the real client IP instead of the proxy's. Too high lets clients fake their IP
+    // with X-Forwarded-For, so it must match the actual chain. 0 when nothing is in front.
+    TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
     // Invite emails go through Resend when both are set; otherwise they are skipped and the
     // owner copies the link from the Share dialog (ADR 015).
     RESEND_API_KEY: z.string().min(1).optional(),
@@ -28,7 +39,6 @@ const envSchema = z
     if (env.NODE_ENV === 'production' && !env.CLIENT_URL) {
       ctx.addIssue({ code: 'custom', path: ['CLIENT_URL'], message: 'is required in production' });
     }
-    // An https site needs Secure cookies; turning them off there is always a mistake.
     if ((env.RESEND_API_KEY === undefined) !== (env.EMAIL_FROM === undefined)) {
       ctx.addIssue({
         code: 'custom',
@@ -36,6 +46,7 @@ const envSchema = z
         message: 'set RESEND_API_KEY and EMAIL_FROM together',
       });
     }
+    // An https site needs Secure cookies; turning them off there is always a mistake.
     if (env.COOKIE_SECURE === false && env.CLIENT_URL?.startsWith('https://')) {
       ctx.addIssue({
         code: 'custom',
