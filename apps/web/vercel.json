@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://taskboard-api.onrender.com/:path*"
+      "destination": "https://taskboard-api-i2je.onrender.com/:path*"
     },
     {
       "source": "/((?!api/).*)",
