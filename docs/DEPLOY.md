@@ -13,11 +13,14 @@ so the login cookies are first-party in every browser, Safari included (ADR 018)
 connection is the one exception: Vercel can't forward WebSockets, so the socket connects to
 Render directly and logs in with a one-time ticket.
 
+**Live deployment:** web `https://taskboard-murex-omega.vercel.app`, api
+`https://taskboard-api-i2je.onrender.com` (Render added `-i2je` because `taskboard-api` was taken).
+
 ```mermaid
 flowchart LR
-  B[Browser] -->|pages| V[Vercel<br/>taskboard.vercel.app]
+  B[Browser] -->|pages| V[Vercel<br/>taskboard-murex-omega.vercel.app]
   B -->|/api/* REST + cookies| V
-  V -->|rewrite| R[Render<br/>taskboard-api.onrender.com]
+  V -->|rewrite| R[Render<br/>taskboard-api-i2je.onrender.com]
   B -->|WebSocket + ticket| R
   R --> A[(MongoDB Atlas)]
 ```
@@ -41,7 +44,8 @@ flowchart LR
   - the **Vercel project name** → your site will be `https://<project>.vercel.app`
     (for example `taskboard` → `https://taskboard.vercel.app`, if the name is free);
   - the **Render service name** is `taskboard-api` (from `render.yaml`) → the api will be
-    `https://taskboard-api.onrender.com`, if the name is free.
+    `https://taskboard-api.onrender.com` only if nobody has that name. Otherwise Render adds a
+    suffix (ours is `https://taskboard-api-i2je.onrender.com`), and Step 4 is required.
 - [ ] **Locally:** the repository is checked out on `main`, `pnpm install` has run, and the root
       `.env` exists (the seed in Step 5 reads `JWT_ACCESS_SECRET` from it).
 
@@ -80,11 +84,11 @@ Vercel goes first because the api needs to know the site's address.
       sets them (`pnpm install --frozen-lockfile`, `pnpm build`, output `dist`).
 - [ ] **Environment variables** (all three, environment _Production_):
 
-  | Name                           | Value                                |
-  | ------------------------------ | ------------------------------------ |
-  | `VITE_API_URL`                 | `/api`                               |
-  | `VITE_SOCKET_URL`              | `https://taskboard-api.onrender.com` |
-  | `ENABLE_EXPERIMENTAL_COREPACK` | `1`                                  |
+  | Name                           | Value                                                                        |
+  | ------------------------------ | ---------------------------------------------------------------------------- |
+  | `VITE_API_URL`                 | `/api`                                                                       |
+  | `VITE_SOCKET_URL`              | the Render URL from Step 3 (ours: `https://taskboard-api-i2je.onrender.com`) |
+  | `ENABLE_EXPERIMENTAL_COREPACK` | `1`                                                                          |
 
   The last one makes Vercel use the pnpm version pinned in `package.json` (`pnpm@12.15.0`).
 
@@ -111,7 +115,7 @@ Vercel goes first because the api needs to know the site's address.
 - [ ] **Check the logs** (service → _Logs_): you should see `mongodb connected` and
       `api listening`. If you see `Invalid environment variables`, the message names the value to
       fix (Environment tab, then _Manual Deploy_).
-- [ ] **Check the health URL** in the browser: `https://taskboard-api.onrender.com/health`
+- [ ] **Check the health URL** in the browser: `https://<render-url>/health`
       returns `{"status":"ok","db":"connected"}`.
 - [ ] **Write down the service URL** shown at the top of the service page.
 
@@ -122,14 +126,24 @@ Vercel goes first because the api needs to know the site's address.
 
 Skip this step if the Render URL is exactly `https://taskboard-api.onrender.com`.
 
-If the name was taken, Render gives a different address (for example
-`https://taskboard-api-x7k2.onrender.com`). Then:
+If the name was taken, Render gives a different address (ours is
+`https://taskboard-api-i2je.onrender.com`). **Don't skip this:** the old name belongs to someone
+else's service, so until the rewrite changes, Vercel forwards every sign-in (email and password
+included) to a stranger's server. That shows up as an HTML `Cannot POST /auth/login` 404 instead
+of the api's JSON errors.
 
 - [ ] In `apps/web/vercel.json`, change the rewrite destination to the real address
-      (`"destination": "https://taskboard-api-x7k2.onrender.com/:path*"`), commit and merge to
+      (`"destination": "https://taskboard-api-i2je.onrender.com/:path*"`), commit and merge to
       `main`.
 - [ ] In Vercel, set `VITE_SOCKET_URL` to the same address.
-- [ ] Redeploy on Vercel (the merge to `main` usually triggers it).
+- [ ] Deploy the **new commit** on Vercel: _Deployments_ → _Create Deployment_ → `main`. Don't use
+      _Redeploy_ on an older deployment: it rebuilds **that deployment's commit** (with the current
+      env vars), so the old rewrite stays. Check that the new deployment's _Source_ shows the merge
+      commit and that it is marked _Production_.
+- [ ] Check the proxy: `curl -i https://<vercel-url>/api/health` returns
+      `{"status":"ok","db":"connected"}`. An HTML `Cannot GET /health` means the rewrite still
+      points at the wrong service (a header `x-powered-by: Express` gives it away; our api never
+      sends it).
 
 ## Step 5 — Demo data
 
@@ -173,6 +187,8 @@ Then tell me the results; we confirm `TRUST_PROXY` together in Slice 7.2.
 | Vercel build can't find `@taskboard/shared`                        | _Include files outside the root directory_ is off. Turn it on (Settings → Build and Deployment).                                                                            |
 | Reloading `/b/...` shows Vercel's 404                              | `apps/web/vercel.json` isn't in the deployed commit, or the Root Directory isn't `apps/web`.                                                                                |
 | Sign-in shows "Something went wrong", api logs show nothing        | The rewrite points at the wrong Render address (Step 4), or the api is still waking up.                                                                                     |
+| Sign-in fails with an HTML 404 `Cannot POST /auth/login`           | The live build has an old rewrite pointing at someone else's service. Fix `vercel.json`, then _Create Deployment_ from `main` (not _Redeploy_), Step 4.                     |
+| Demo sign-in says "Invalid email or password"                      | The production database has no demo users yet. Run the seed (Step 5).                                                                                                       |
 | Sign-in fails with 403                                             | `CLIENT_URL` on Render doesn't match the address in the browser exactly (`https://`, no path). Fix it and _Manual Deploy_.                                                  |
 | Signed in, but every later page says you're signed out             | The refresh cookie's path is wrong: `API_PUBLIC_PATH` must be `/api` on Render.                                                                                             |
 | Everything works except live updates (no "online" count)           | `VITE_SOCKET_URL` is wrong or missing (redeploy Vercel after fixing; `VITE_*` values are baked in at build time), or `CLIENT_URL` doesn't match (the socket checks it too). |
@@ -205,13 +221,15 @@ and exits if it can't reach the database.
 
 ### Vercel environment variables (web)
 
-| Variable                       | Value                                | Why                                                  |
-| ------------------------------ | ------------------------------------ | ---------------------------------------------------- |
-| `VITE_API_URL`                 | `/api`                               | REST goes through Vercel's rewrite (first-party)     |
-| `VITE_SOCKET_URL`              | `https://taskboard-api.onrender.com` | WebSockets go to Render directly                     |
-| `ENABLE_EXPERIMENTAL_COREPACK` | `1`                                  | Installs the pnpm version pinned in `packageManager` |
+| Variable                       | Value                                     | Why                                                  |
+| ------------------------------ | ----------------------------------------- | ---------------------------------------------------- |
+| `VITE_API_URL`                 | `/api`                                    | REST goes through Vercel's rewrite (first-party)     |
+| `VITE_SOCKET_URL`              | `https://taskboard-api-i2je.onrender.com` | WebSockets go to Render directly                     |
+| `ENABLE_EXPERIMENTAL_COREPACK` | `1`                                       | Installs the pnpm version pinned in `packageManager` |
 
-`VITE_*` values are baked into the bundle at build time: redeploy after changing them.
+`VITE_*` values are baked into the bundle at build time: deploy again after changing them.
+_Redeploy_ is enough for an env change; a `vercel.json` change needs a deployment of the new
+commit (_Create Deployment_ → `main`).
 
 ### Known limits
 
