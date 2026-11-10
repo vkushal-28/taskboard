@@ -9,6 +9,7 @@ import {
 import { useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { Avatar } from '../../components/Avatar';
+import { FeedSkeleton } from '../../components/FeedSkeleton';
 import { describeError } from '../../lib/api-error';
 import { formatRelative, useNow } from '../../lib/time';
 import { useCardActivity } from '../activity/api';
@@ -84,10 +85,17 @@ function Comments({ card, canEdit }: CardActivityProps) {
   return (
     <div className="space-y-4">
       {canEdit && <CommentForm card={card} />}
-      {comments.isPending && <p className="text-sm text-slate-500">Loading comments…</p>}
+      {comments.isPending && <FeedSkeleton label="Loading comments" rows={2} />}
       {comments.isError && <p className="text-sm text-red-600">Could not load comments.</p>}
       {comments.isSuccess && items.length === 0 && (
-        <p className="text-sm text-slate-500">No comments yet.</p>
+        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center">
+          <p className="text-sm font-medium text-slate-700">No comments yet.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {canEdit
+              ? 'Start the conversation: ask a question or share an update.'
+              : 'Comments from the team will show up here.'}
+          </p>
+        </div>
       )}
       {items.length > 0 && (
         <ol className="space-y-4" aria-label="Comments">
@@ -202,7 +210,7 @@ function History({ cardId }: { cardId: string }) {
 
   return (
     <div className="space-y-4">
-      {history.isPending && <p className="text-sm text-slate-500">Loading history…</p>}
+      {history.isPending && <FeedSkeleton label="Loading history" />}
       {history.isError && <p className="text-sm text-red-600">Could not load history.</p>}
       {history.isSuccess && items.length === 0 && (
         <p className="text-sm text-slate-500">No history yet.</p>

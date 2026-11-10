@@ -152,3 +152,29 @@ describe('Board page', () => {
     expect(cardTitles('To Do')).toEqual(['Card c1', 'Card c2', 'Card c3']);
   });
 });
+
+describe('Board page empty states', () => {
+  it('marks an empty list as a place to add or drop cards', async () => {
+    stubBoard();
+    renderApp('/b/b1');
+
+    await screen.findByRole('heading', { name: 'Done', level: 2 });
+    expect(listSection('Done')).toHaveTextContent('No cards yet. Add one or drop one here.');
+    expect(listSection('To Do')).not.toHaveTextContent('No cards yet');
+  });
+
+  it('tells a viewer that an empty board has no lists', async () => {
+    stubBoard({ ...boardDetail('viewer'), lists: [], cards: [] });
+    renderApp('/b/b1');
+
+    expect(await screen.findByText('This board has no lists yet.')).toBeVisible();
+  });
+
+  it('prompts an owner to add the first list', async () => {
+    stubBoard({ ...boardDetail('owner'), lists: [], cards: [] });
+    renderApp('/b/b1');
+
+    expect(await screen.findByText(/Start with a list/)).toBeVisible();
+    expect(screen.queryByText('This board has no lists yet.')).toBeNull();
+  });
+});

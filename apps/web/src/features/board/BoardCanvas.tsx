@@ -125,8 +125,19 @@ export function BoardCanvas({ detail }: { detail: BoardDetail }) {
           />
         ))}
 
+        {lists.length === 0 && !canEdit && (
+          <p className="rounded-xl border border-dashed border-slate-300 px-6 py-8 text-sm text-slate-500">
+            This board has no lists yet.
+          </p>
+        )}
+
         {canEdit && (
           <div className="w-72 shrink-0 rounded-xl border-2 border-dashed border-slate-300 p-3">
+            {lists.length === 0 && (
+              <p className="mb-2 px-2 text-sm text-slate-600">
+                Start with a list, like “To Do”, then add cards to it.
+              </p>
+            )}
             <InlineAddForm
               openLabel="Add a list"
               fieldLabel="List title"

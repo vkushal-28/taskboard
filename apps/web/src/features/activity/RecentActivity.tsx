@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { Avatar } from '../../components/Avatar';
+import { FeedSkeleton } from '../../components/FeedSkeleton';
 import { formatRelative, useNow } from '../../lib/time';
 import { useRecentActivity } from './api';
 import { describeActivity } from './describe';
@@ -17,7 +18,11 @@ export function RecentActivity() {
         Recent activity
       </h2>
 
-      {activity.isPending && <p className="mt-4 text-sm text-slate-500">Loading activity…</p>}
+      {activity.isPending && (
+        <div className="mt-4">
+          <FeedSkeleton label="Loading activity" rows={4} />
+        </div>
+      )}
       {activity.isError && <p className="mt-4 text-sm text-red-600">Could not load activity.</p>}
       {activity.isSuccess && activity.data.length === 0 && (
         <p className="mt-4 text-sm text-slate-500">

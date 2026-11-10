@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Avatar } from '../../components/Avatar';
 import { Dialog } from '../../components/Dialog';
+import { FeedSkeleton } from '../../components/FeedSkeleton';
 import { describeError } from '../../lib/api-error';
 import { useNow } from '../../lib/time';
 import { useAuth } from '../auth/api';
@@ -259,7 +260,7 @@ function PendingInvites({
 }) {
   const invites = useInvites(boardId);
   const now = useNow();
-  if (invites.isPending) return <p className="text-sm text-slate-500">Loading invites…</p>;
+  if (invites.isPending) return <FeedSkeleton label="Loading invites" rows={2} />;
   if (invites.isError) return <p className="text-sm text-red-600">Could not load invites.</p>;
   if (invites.data.length === 0) return null;
 
