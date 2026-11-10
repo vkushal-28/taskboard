@@ -94,7 +94,7 @@ whole stack as production builds (web on http://localhost:8080).
 ## Testing
 
 ```bash
-pnpm test        # unit and integration tests: api, web and shared (720 tests)
+pnpm test        # unit and integration tests: api, web and shared (733 tests)
 pnpm e2e         # Playwright end-to-end tests (needs MongoDB running)
 pnpm lint        # ESLint + Prettier
 pnpm typecheck   # TypeScript across all packages
