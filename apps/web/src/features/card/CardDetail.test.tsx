@@ -433,6 +433,52 @@ describe('actions', () => {
     expect(toasts()).toEqual(['Card deleted.']);
   });
 
+  // In production the socket echo of your own write often beats the HTTP response. The card
+  // leaves the cache first, the modal unmounts, and only then does the request finish.
+  it.each([
+    [
+      'delete',
+      'DELETE /cards/c1',
+      () => noContent(),
+      'card:deleted',
+      { cardId: 'c1', listId: 'l1' },
+      'Card deleted.',
+    ],
+    [
+      'archive',
+      'PATCH /cards/c1',
+      () => json(200, { card: c1({ archived: true }) }),
+      'card:updated',
+      { card: c1({ archived: true, version: 99 }) },
+      'Card archived.',
+    ],
+  ] as const)(
+    'returns to the board after its own %s even when the live update arrives first',
+    async (action, route, respond, event, payload, toast) => {
+      let finish: (response: Response) => void = () => {};
+      stubBoard(undefined, {
+        [route]: () => new Promise<Response>((resolve) => (finish = resolve)),
+      });
+      const { router, dialog } = await openCard();
+      await waitFor(() => expect(fakeSocket.emitted.length).toBeGreaterThan(0));
+
+      if (action === 'delete') {
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Delete…' }));
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Delete card' }));
+      } else {
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
+      }
+      act(() => fakeSocket.serverEmit(event, { boardId: 'b1', actorId: 'u1', ...payload }));
+      await waitFor(() => expect(screen.queryByTestId('card-detail')).not.toBeInTheDocument());
+      act(() => {
+        finish(respond());
+      });
+
+      await waitFor(() => expect(router.state.location.pathname).toBe('/b/b1'));
+      expect(toasts()).toEqual([toast]);
+    },
+  );
+
   it('archives the card and returns to the board', async () => {
     stubBoard(undefined, { 'PATCH /cards/c1': () => json(200, { card: c1({ archived: true }) }) });
     const { router, dialog } = await openCard();
