@@ -16,6 +16,7 @@ describe('parseEnv', () => {
       COOKIE_SECURE: false,
       API_PUBLIC_PATH: '',
       TRUST_PROXY: 0,
+      AUTH_RATE_LIMIT: 10,
     });
   });
 
@@ -32,6 +33,10 @@ describe('parseEnv', () => {
 
   it.each(['-1', '1.5', 'yes'])('rejects TRUST_PROXY %s', (hops) => {
     expect(() => parseEnv({ ...required, TRUST_PROXY: hops })).toThrow(/TRUST_PROXY/);
+  });
+
+  it.each(['0', '-5', 'many'])('rejects AUTH_RATE_LIMIT %s', (value) => {
+    expect(() => parseEnv({ ...required, AUTH_RATE_LIMIT: value })).toThrow(/AUTH_RATE_LIMIT/);
   });
 
   it('keeps the commit Render sets', () => {

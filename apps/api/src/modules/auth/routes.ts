@@ -1,6 +1,7 @@
 import { loginSchema, registerSchema } from '@taskboard/shared';
 import { Router, type RequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
+import { env } from '../../config/env.js';
 import { TooManyRequests } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/require-auth.js';
 import { validateBody } from '../../middleware/validate.js';
@@ -22,7 +23,7 @@ function limit(limitPerWindow: number): RequestHandler {
 // in-memory rate-limit counters.
 export function createAuthRouter(): Router {
   const router = Router();
-  const credentialsLimit = limit(10);
+  const credentialsLimit = limit(env.AUTH_RATE_LIMIT);
 
   router.post('/register', credentialsLimit, validateBody(registerSchema), controller.register);
   router.post('/login', credentialsLimit, validateBody(loginSchema), controller.login);

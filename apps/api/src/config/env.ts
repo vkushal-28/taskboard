@@ -28,6 +28,9 @@ const envSchema = z
     // key on the real client IP instead of the proxy's. Too high lets clients fake their IP
     // with X-Forwarded-For, so it must match the actual chain. 0 when nothing is in front.
     TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+    // Sign-in and register attempts per client IP per 15 minutes. Production keeps the default;
+    // the e2e suite raises it, because every test registers its own people from one IP.
+    AUTH_RATE_LIMIT: z.coerce.number().int().min(1).default(10),
     // Invite emails go through Resend when both are set; otherwise they are skipped and the
     // owner copies the link from the Share dialog (ADR 015).
     RESEND_API_KEY: z.string().min(1).optional(),
