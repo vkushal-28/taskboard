@@ -34,6 +34,15 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...required, TRUST_PROXY: hops })).toThrow(/TRUST_PROXY/);
   });
 
+  it('keeps the commit Render sets', () => {
+    const commit = '6baa979c23e5d0d34267468324862c62231e4c1a';
+    expect(parseEnv({ ...required, RENDER_GIT_COMMIT: commit }).RENDER_GIT_COMMIT).toBe(commit);
+  });
+
+  it('rejects a RENDER_GIT_COMMIT that is not a SHA', () => {
+    expect(() => parseEnv({ ...required, RENDER_GIT_COMMIT: 'main' })).toThrow(/RENDER_GIT_COMMIT/);
+  });
+
   it('coerces PORT from a string', () => {
     expect(
       parseEnv({ ...required, MONGODB_URI: 'mongodb+srv://cluster.example.net/db', PORT: '8080' })

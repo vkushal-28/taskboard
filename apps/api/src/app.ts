@@ -16,7 +16,16 @@ import { createListsRouter } from './modules/lists/routes.js';
 import { createMembersRouter } from './modules/members/routes.js';
 import { createRealtimeRouter } from './modules/realtime/routes.js';
 
-export function createApp({ trustProxy = env.TRUST_PROXY }: { trustProxy?: number } = {}) {
+interface AppOptions {
+  trustProxy?: number;
+  /** The deployed commit, or null outside Render. */
+  commit?: string | null;
+}
+
+export function createApp({
+  trustProxy = env.TRUST_PROXY,
+  commit = env.RENDER_GIT_COMMIT ?? null,
+}: AppOptions = {}) {
   const app = express();
   const clientOrigin = new URL(env.CLIENT_URL).origin;
 
@@ -39,7 +48,7 @@ export function createApp({ trustProxy = env.TRUST_PROXY }: { trustProxy?: numbe
   app.get('/health', (_req, res) => {
     const db = getDbStatus();
     const healthy = db === 'connected';
-    res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', db });
+    res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', db, commit });
   });
 
   app.use('/auth', createAuthRouter());

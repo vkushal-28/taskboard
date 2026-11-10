@@ -32,6 +32,12 @@ const envSchema = z
     // owner copies the link from the Share dialog (ADR 015).
     RESEND_API_KEY: z.string().min(1).optional(),
     EMAIL_FROM: z.string().min(3).optional(),
+    // Set by Render on every deploy. /health reports it, so the deploy workflow can tell the
+    // new version from the old one that keeps answering while Render builds.
+    RENDER_GIT_COMMIT: z
+      .string()
+      .regex(/^[0-9a-f]{7,40}$/, 'must be a git commit SHA')
+      .optional(),
   })
   // A localhost default in production would make CORS and the Origin check reject every
   // write from the real site, so production must set CLIENT_URL explicitly.
