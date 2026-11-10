@@ -74,7 +74,7 @@ function SidebarButton({
       type="button"
       onClick={onClick}
       aria-expanded={expanded}
-      className="block w-full rounded-lg bg-slate-100 px-3 py-1.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-200 aria-expanded:bg-slate-200"
+      className="block w-full rounded-lg bg-slate-200/70 px-3 py-1.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-300/50 aria-expanded:bg-slate-300/50"
     >
       {children}
     </button>
