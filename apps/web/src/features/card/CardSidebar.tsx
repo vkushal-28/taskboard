@@ -244,23 +244,25 @@ function CardActions({ card, onClose, setLeaving }: Omit<CardSidebarProps, 'memb
   const remove = useDeleteCard(card.boardId, card.id);
   const [confirming, setConfirming] = useState(false);
 
+  // mutateAsync, not mutate(…, { onSuccess }): the socket echo of this write often arrives
+  // before the response and removes the card, which unmounts this modal, and TanStack Query
+  // skips mutate's per-call callbacks after an unmount. The promise still settles.
+  function leaveAfter(write: Promise<unknown>, message: string) {
+    setLeaving(true);
+    write.then(
+      () => {
+        showToast(message, 'info');
+        onClose();
+      },
+      () => setLeaving(false),
+    );
+  }
+
   return (
     <div className="space-y-2">
       <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Actions</h3>
       <SidebarButton
-        onClick={() => {
-          setLeaving(true);
-          archive.mutate(
-            { archived: true },
-            {
-              onSuccess: () => {
-                showToast('Card archived.', 'info');
-                onClose();
-              },
-              onError: () => setLeaving(false),
-            },
-          );
-        }}
+        onClick={() => leaveAfter(archive.mutateAsync({ archived: true }), 'Card archived.')}
       >
         Archive
       </SidebarButton>
@@ -273,16 +275,7 @@ function CardActions({ card, onClose, setLeaving }: Omit<CardSidebarProps, 'memb
             <button
               type="button"
               disabled={remove.isPending}
-              onClick={() => {
-                setLeaving(true);
-                remove.mutate(undefined, {
-                  onSuccess: () => {
-                    showToast('Card deleted.', 'info');
-                    onClose();
-                  },
-                  onError: () => setLeaving(false),
-                });
-              }}
+              onClick={() => leaveAfter(remove.mutateAsync(), 'Card deleted.')}
               className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
             >
               Delete card
