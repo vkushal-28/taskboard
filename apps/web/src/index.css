@@ -16,6 +16,15 @@
     cursor: pointer;
   }
 
+  /*
+   * A visible keyboard focus ring on everything focusable. Only :focus-visible, so mouse
+   * clicks don't show it. Controls with their own focus-visible ring or focus styles override it.
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-indigo-500);
+    outline-offset: 2px;
+  }
+
   button:disabled,
   [role='button'][aria-disabled='true'],
   select:disabled,
