@@ -147,7 +147,7 @@ function BoardSearch({ value, onChange }: { value: string; onChange: (value: str
       placeholder="Search boards"
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="hidden w-56 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-sm focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-200 focus:outline-none sm:block"
+      className="w-full min-w-0 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-sm focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-200 focus:outline-none sm:w-56"
     />
   );
 }

@@ -13,7 +13,7 @@ export function BoardPage() {
 
   return (
     <div className="flex h-screen flex-col bg-slate-50">
-      <AppHeader />
+      <AppHeader fullWidth />
       {board.isPending && <BoardSkeleton />}
       {board.isError && (
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">

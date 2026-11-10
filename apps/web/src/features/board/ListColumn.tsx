@@ -43,7 +43,7 @@ export function ListColumn({ boardId, list, cards, members, canEdit }: ListColum
 
       <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
         <ol
-          className={`min-h-12 flex-1 space-y-2 overflow-y-auto px-3 pb-2 ${
+          className={`min-h-12 flex-1 space-y-2 overflow-y-auto px-3 pt-1 pb-2 ${
             isOver && cards.length === 0 ? 'rounded-lg bg-indigo-50' : ''
           }`}
         >

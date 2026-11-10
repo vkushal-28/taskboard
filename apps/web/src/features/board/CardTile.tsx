@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router';
 import { Avatar } from '../../components/Avatar';
 import { DUE_BADGE_CLASSES, DUE_STATUS_TEXT, dueStatus } from '../../lib/due-date';
 import { useNow } from '../../lib/time';
+import { describeCard } from './card-description';
 import { useLiveStore } from './live-store';
 
 const dueFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' });
@@ -93,7 +94,15 @@ interface SortableCardProps extends CardTileProps {
 }
 
 export function SortableCard({ card, members, listId, disabled }: SortableCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: card.id,
     data: { type: 'card', listId },
     disabled,
@@ -101,11 +110,12 @@ export function SortableCard({ card, members, listId, disabled }: SortableCardPr
   const movingUserId = useLiveStore((state) => state.draggingByCard[card.id]);
   const movingName = movingUserId ? (members.get(movingUserId)?.name ?? 'Someone') : null;
   const navigate = useNavigate();
+  const now = useNow();
   const open = () => void navigate(`/b/${card.boardId}/c/${card.id}`);
 
   // Space picks the card up (BoardCanvas limits dnd-kit's keyboard sensor to Space), Enter
   // opens it. A click opens it too; the pointer sensor's 5 px threshold keeps drags apart.
-  function onKeyDown(event: KeyboardEvent<HTMLLIElement>) {
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     listeners?.onKeyDown?.(event);
     if (event.key === 'Enter' && !isDragging && !event.defaultPrevented) {
       event.preventDefault();
@@ -113,31 +123,48 @@ export function SortableCard({ card, members, listId, disabled }: SortableCardPr
     }
   }
 
+  const descriptionId = `card-${card.id}-description`;
+  const statusId = `card-${card.id}-status`;
+  const assignees = card.assignees.flatMap((id) => members.get(id) ?? []);
+
+  // The <li> stays a plain list item, so screen readers still hear "list, 3 items"; the
+  // inner div is the draggable, openable button (dnd-kit gives it role="button").
   return (
     <li
       ref={setNodeRef}
-      data-testid={`card-${card.id}`}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       // The original stays in place as a faded gap; the DragOverlay follows the pointer.
-      className={`list-none rounded-lg focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none ${
-        isDragging ? 'opacity-40' : ''
-      } ${disabled ? '' : 'cursor-grab active:cursor-grabbing'} ${
-        movingName ? 'ring-2 ring-amber-400' : ''
-      }`}
-      aria-label={card.title}
-      {...attributes}
-      {...listeners}
-      // Viewers can't drag, but the card still opens, so it isn't a disabled button.
-      aria-disabled={undefined}
-      onClick={open}
-      onKeyDown={onKeyDown}
+      className={`rounded-lg ${isDragging ? 'opacity-40' : ''}`}
     >
-      <CardTile card={card} members={members} />
-      {movingName && (
-        <p role="status" className="px-1 pt-1 text-xs font-medium text-amber-700">
-          {movingName} is moving this
-        </p>
-      )}
+      <div
+        ref={setActivatorNodeRef}
+        data-testid={`card-${card.id}`}
+        className={`rounded-lg focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none ${
+          disabled ? '' : 'cursor-grab active:cursor-grabbing'
+        } ${movingName ? 'ring-2 ring-amber-400' : ''}`}
+        aria-label={card.title}
+        {...attributes}
+        {...listeners}
+        // The name is only the title; labels, due date, checklist and "is moving" are read after it.
+        aria-describedby={`${descriptionId} ${statusId}`}
+        // Viewers can't drag, but the card still opens, so it isn't a disabled button.
+        aria-disabled={undefined}
+        onClick={open}
+        onKeyDown={onKeyDown}
+      >
+        <CardTile card={card} members={members} />
+        <span id={descriptionId} className="sr-only">
+          {describeCard(card, assignees, now)}
+        </span>
+      </div>
+      {/* Always rendered: a live region only announces changes to an element that already exists. */}
+      <p
+        id={statusId}
+        role="status"
+        className={movingName ? 'px-1 pt-1 text-xs font-medium text-amber-700' : 'sr-only'}
+      >
+        {movingName ? `${movingName} is moving this` : ''}
+      </p>
     </li>
   );
 }

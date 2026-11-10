@@ -334,13 +334,22 @@ describe('presence and drag cues', () => {
 
   it('shows "<name> is moving this" on a card someone else drags, until they drop it', async () => {
     await openBoard();
-    const tile = screen.getByTestId('card-c2');
+    // The cue's live region sits next to the card button, inside the card's list item.
+    const item = screen.getByTestId('card-c2').closest('li') as HTMLElement;
+    const cue = within(item).getByRole('status');
+    expect(cue).toBeEmptyDOMElement();
+    expect(screen.getByTestId('card-c2')).toHaveAccessibleDescription(
+      expect.not.stringContaining('moving'),
+    );
 
     act(() => fakeSocket.serverEmit(CARD_DRAGGING, { boardId: 'b1', userId: 'u2', cardId: 'c2' }));
-    expect(within(tile).getByRole('status')).toHaveTextContent('Alex Kim is moving this');
+    expect(cue).toHaveTextContent('Alex Kim is moving this');
+    expect(screen.getByTestId('card-c2')).toHaveAccessibleDescription(
+      expect.stringContaining('Alex Kim is moving this'),
+    );
 
     act(() => fakeSocket.serverEmit(CARD_DRAGGING, { boardId: 'b1', userId: 'u2', cardId: null }));
-    expect(within(tile).queryByRole('status')).not.toBeInTheDocument();
+    expect(cue).toBeEmptyDOMElement();
   });
 
   it('forgets presence and drag cues when the connection drops', async () => {
