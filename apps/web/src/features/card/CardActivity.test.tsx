@@ -195,7 +195,9 @@ describe('history', () => {
       'GET /cards/c1/activity': () =>
         json(200, {
           activity: [
-            historyItem('a3', 'comment.created'),
+            historyItem('a5', 'comment.created'),
+            { ...historyItem('a4', 'card.updated'), fields: ['dueDate'] },
+            { ...historyItem('a3', 'card.updated'), fields: ['labels', 'assignees', 'checklist'] },
             historyItem('a2', 'card.moved'),
             historyItem('a1', 'card.created'),
           ],
@@ -213,6 +215,8 @@ describe('history', () => {
         .map((item) => item.textContent),
     ).toEqual([
       expect.stringContaining('Alex Kim commented'),
+      expect.stringContaining('Alex Kim updated the due date'),
+      expect.stringContaining('Alex Kim updated the labels, members and checklist'),
       expect.stringContaining('Alex Kim moved this card to "In Progress"'),
       expect.stringContaining('Alex Kim created this card'),
     ]);

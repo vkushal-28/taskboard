@@ -17,7 +17,15 @@ describe('GET /health', () => {
     const res = await request(createApp()).get('/health');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok', db: 'connected' });
+    expect(res.body).toEqual({ status: 'ok', db: 'connected', commit: null });
+  });
+
+  it('reports the deployed commit, so the deploy workflow can wait for the new version', async () => {
+    vi.mocked(getDbStatus).mockReturnValue('connected');
+
+    const res = await request(createApp({ commit: 'abc1234' })).get('/health');
+
+    expect(res.body).toEqual({ status: 'ok', db: 'connected', commit: 'abc1234' });
   });
 
   it('returns 503 when the database is disconnected', async () => {
@@ -26,7 +34,7 @@ describe('GET /health', () => {
     const res = await request(createApp()).get('/health');
 
     expect(res.status).toBe(503);
-    expect(res.body).toEqual({ status: 'degraded', db: 'disconnected' });
+    expect(res.body).toEqual({ status: 'degraded', db: 'disconnected', commit: null });
   });
 });
 

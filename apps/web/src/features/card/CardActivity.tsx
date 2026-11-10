@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createCommentSchema,
+  type ActivityItem,
   type ActivityType,
   type CardDto,
   type CommentDto,
@@ -11,6 +12,7 @@ import { Avatar } from '../../components/Avatar';
 import { describeError } from '../../lib/api-error';
 import { formatRelative, useNow } from '../../lib/time';
 import { useCardActivity } from '../activity/api';
+import { describeCardFields } from '../activity/describe';
 import { useAddComment, useComments } from './comments-api';
 
 type Tab = 'comments' | 'history';
@@ -179,11 +181,19 @@ function CommentForm({ card }: { card: CardDto }) {
 // Board-level types (lists, the board itself) never carry this card's id.
 const HISTORY_SENTENCES: Partial<Record<ActivityType, string>> = {
   'card.created': 'created this card',
-  'card.updated': 'updated this card',
   'card.archived': 'archived this card',
   'card.restored': 'restored this card',
   'comment.created': 'commented',
 };
+
+function historySentence(item: ActivityItem): string {
+  if (item.type === 'card.moved') {
+    return `moved this card to ${item.list ? `"${item.list.title}"` : 'another list'}`;
+  }
+  if (item.type === 'card.updated')
+    return `updated ${describeCardFields(item.fields) ?? 'this card'}`;
+  return HISTORY_SENTENCES[item.type] ?? 'changed this card';
+}
 
 function History({ cardId }: { cardId: string }) {
   const history = useCardActivity(cardId);
@@ -204,9 +214,7 @@ function History({ cardId }: { cardId: string }) {
               <ActorAvatar actor={item.actor} />
               <p className="min-w-0 text-slate-700">
                 <span className="font-medium text-slate-900">{item.actor?.name ?? 'Someone'}</span>{' '}
-                {item.type === 'card.moved'
-                  ? `moved this card to ${item.list ? `"${item.list.title}"` : 'another list'}`
-                  : (HISTORY_SENTENCES[item.type] ?? 'changed this card')}{' '}
+                {historySentence(item)}{' '}
                 <time dateTime={item.createdAt} className="text-xs text-slate-500">
                   {formatRelative(item.createdAt, now)}
                 </time>

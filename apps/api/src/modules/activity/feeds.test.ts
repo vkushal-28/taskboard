@@ -1,4 +1,5 @@
 import { activityPageSchema } from '@taskboard/shared';
+import { Types } from 'mongoose';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -11,6 +12,7 @@ import {
   parseBody,
 } from '../../../test/factories.js';
 import { createApp } from '../../app.js';
+import { ActivityModel } from './model.js';
 
 // Only the ids matter here; the full schemas are tested in their own modules.
 const listShape = z.object({ list: z.object({ id: z.string() }) });
@@ -116,6 +118,40 @@ describe('GET /cards/:cardId/activity', () => {
     ]);
     expect(activity.every((item) => item.card?.id === cardId)).toBe(true);
     expect(nextCursor).toBeNull();
+  });
+
+  it('names the fields a card update changed', async () => {
+    const { list, cookie } = await setup();
+    const cardId = await addCard(cookie, list.id, 'Login page');
+    await request(app)
+      .patch(`/cards/${cardId}`)
+      .set('Cookie', cookie)
+      .send({ dueDate: '2026-12-01T17:00:00.000Z', labels: [{ name: 'Web', color: '#2563eb' }] });
+    await request(app).post(`/cards/${cardId}/checklist`).set('Cookie', cookie).send({ text: 'A' });
+
+    const { activity } = await feed(cookie, `/cards/${cardId}/activity`);
+
+    expect(activity.map((item) => [item.type, item.fields])).toEqual([
+      ['card.updated', ['checklist']],
+      ['card.updated', ['labels', 'dueDate']],
+      ['card.created', undefined],
+    ]);
+  });
+
+  it('leaves out unknown fields recorded by older entries', async () => {
+    const { board, list, cookie } = await setup();
+    const cardId = await addCard(cookie, list.id, 'Login page');
+    await ActivityModel.create({
+      boardId: board._id,
+      actorId: new Types.ObjectId(),
+      cardId,
+      type: 'card.updated',
+      meta: { fields: ['title', 'position', 42] },
+    });
+
+    const { activity } = await feed(cookie, `/cards/${cardId}/activity`);
+
+    expect(activity[0]?.fields).toEqual(['title']);
   });
 
   it('keeps the history of an archived card readable', async () => {

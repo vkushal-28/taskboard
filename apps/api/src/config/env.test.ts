@@ -16,6 +16,7 @@ describe('parseEnv', () => {
       COOKIE_SECURE: false,
       API_PUBLIC_PATH: '',
       TRUST_PROXY: 0,
+      AUTH_RATE_LIMIT: 10,
     });
   });
 
@@ -32,6 +33,19 @@ describe('parseEnv', () => {
 
   it.each(['-1', '1.5', 'yes'])('rejects TRUST_PROXY %s', (hops) => {
     expect(() => parseEnv({ ...required, TRUST_PROXY: hops })).toThrow(/TRUST_PROXY/);
+  });
+
+  it.each(['0', '-5', 'many'])('rejects AUTH_RATE_LIMIT %s', (value) => {
+    expect(() => parseEnv({ ...required, AUTH_RATE_LIMIT: value })).toThrow(/AUTH_RATE_LIMIT/);
+  });
+
+  it('keeps the commit Render sets', () => {
+    const commit = '6baa979c23e5d0d34267468324862c62231e4c1a';
+    expect(parseEnv({ ...required, RENDER_GIT_COMMIT: commit }).RENDER_GIT_COMMIT).toBe(commit);
+  });
+
+  it('rejects a RENDER_GIT_COMMIT that is not a SHA', () => {
+    expect(() => parseEnv({ ...required, RENDER_GIT_COMMIT: 'main' })).toThrow(/RENDER_GIT_COMMIT/);
   });
 
   it('coerces PORT from a string', () => {

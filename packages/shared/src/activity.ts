@@ -25,6 +25,18 @@ export const activityTypeSchema = z.enum([
 export type ActivityType = z.infer<typeof activityTypeSchema>;
 export const ACTIVITY_TYPES = activityTypeSchema.options;
 
+// The card fields a `card.updated` entry names, so a feed can say "updated the due date".
+export const cardFieldSchema = z.enum([
+  'title',
+  'description',
+  'labels',
+  'assignees',
+  'dueDate',
+  'checklist',
+]);
+
+export type CardField = z.infer<typeof cardFieldSchema>;
+
 export const RECENT_ACTIVITY_MAX = 50;
 
 export const recentActivityQuerySchema = z.object({
@@ -42,6 +54,8 @@ export const activityItemSchema = z.object({
   board: z.object({ id: z.string(), title: z.string(), color: z.string() }),
   card: z.object({ id: z.string(), title: z.string() }).nullable(),
   list: z.object({ id: z.string(), title: z.string() }).nullable(),
+  // Only on `card.updated`: what changed (empty for entries logged without it).
+  fields: z.array(cardFieldSchema).optional(),
 });
 
 export const recentActivityResponseSchema = z.object({ activity: z.array(activityItemSchema) });

@@ -1,7 +1,10 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { Outlet, type RouteObject } from 'react-router';
 import { Toaster } from '../components/Toaster';
 import { RegisterPage } from '../features/auth/RegisterPage';
 import { ProtectedRoute, PublicOnlyRoute } from '../features/auth/route-guards';
+import { syncSessionAcrossTabs } from '../features/auth/session-sync';
 import { SignInPage } from '../features/auth/SignInPage';
 import { BoardPage } from '../features/board/BoardPage';
 import { CardDetailRoute } from '../features/card/CardDetailRoute';
@@ -10,6 +13,9 @@ import { InviteAcceptPage } from '../features/sharing/InviteAcceptPage';
 import { NotFoundPage } from './NotFoundPage';
 
 function RootLayout() {
+  const queryClient = useQueryClient();
+  useEffect(() => syncSessionAcrossTabs(queryClient), [queryClient]);
+
   return (
     <>
       <Outlet />

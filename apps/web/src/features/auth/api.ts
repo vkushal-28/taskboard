@@ -9,6 +9,7 @@ import { api } from '../../lib/api';
 import { isApiError } from '../../lib/api-error';
 import { showToast } from '../../lib/toast-store';
 import { authKeys, clearSession } from './keys';
+import { announceSession } from './session-sync';
 
 // "Not signed in" is a normal state, not an error, so a 401 resolves to null.
 async function fetchCurrentUser(): Promise<PublicUser | null> {
@@ -37,7 +38,10 @@ export function useLogin() {
   return useMutation({
     mutationFn: (input: LoginInput) =>
       api.request('/auth/login', { method: 'POST', body: input, schema: authUserResponseSchema }),
-    onSuccess: ({ user }) => queryClient.setQueryData(authKeys.me, user),
+    onSuccess: ({ user }) => {
+      queryClient.setQueryData(authKeys.me, user);
+      announceSession(user.id);
+    },
   });
 }
 
@@ -50,7 +54,10 @@ export function useRegister() {
         body: input,
         schema: authUserResponseSchema,
       }),
-    onSuccess: ({ user }) => queryClient.setQueryData(authKeys.me, user),
+    onSuccess: ({ user }) => {
+      queryClient.setQueryData(authKeys.me, user);
+      announceSession(user.id);
+    },
   });
 }
 
@@ -60,7 +67,10 @@ export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api.request('/auth/logout', { method: 'POST' }),
-    onSuccess: () => clearSession(queryClient),
+    onSuccess: () => {
+      clearSession(queryClient);
+      announceSession(null);
+    },
     // The cookies are httpOnly, so only the server can end the session. Showing the user as
     // signed out after a failed request would be a lie: a reload would sign them back in.
     onError: () => showToast(SIGN_OUT_FAILED_MESSAGE),

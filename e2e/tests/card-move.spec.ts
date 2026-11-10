@@ -1,5 +1,6 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { API_URL } from '../playwright.config';
+import { dragOnto, listNamed } from './helpers';
 
 // The seeded demo owner (apps/api/src/modules/demo/seed.ts).
 const PRIYA = { email: 'priya@acme.dev', password: 'demo1234!' };
@@ -55,26 +56,3 @@ test('a card dragged to another list stays there after a reload', async ({ page 
   ]);
   await expect(listNamed(page, 'To Do').getByTestId(/^card-/)).toHaveCount(0);
 });
-
-function listNamed(page: Page, name: string): Locator {
-  return page
-    .getByTestId(/^list-/)
-    .filter({ has: page.getByRole('heading', { name, exact: true }) });
-}
-
-/**
- * Drags with real pointer moves. dnd-kit only starts a drag after the pointer travels a few
- * pixels (DRAG_ACTIVATION_PX), and tracks pointermove events, so Locator.dragTo's single jump
- * isn't enough.
- */
-async function dragOnto(page: Page, source: Locator, target: Locator): Promise<void> {
-  const from = await source.boundingBox();
-  const to = await target.boundingBox();
-  if (!from || !to) throw new Error('drag source or target is not visible');
-  const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
-  await page.mouse.move(start.x, start.y);
-  await page.mouse.down();
-  await page.mouse.move(start.x + 10, start.y, { steps: 5 });
-  await page.mouse.move(to.x + to.width / 2, to.y + 60, { steps: 20 });
-  await page.mouse.up();
-}

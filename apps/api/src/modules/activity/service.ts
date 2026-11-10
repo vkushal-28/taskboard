@@ -1,4 +1,11 @@
-import type { ActivityItem, ActivityPage, ActivityType, CursorQuery } from '@taskboard/shared';
+import {
+  cardFieldSchema,
+  type ActivityItem,
+  type ActivityPage,
+  type ActivityType,
+  type CardField,
+  type CursorQuery,
+} from '@taskboard/shared';
 import { isValidObjectId, type Types } from 'mongoose';
 import { NotFound } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
@@ -113,6 +120,7 @@ async function resolveActivity(rows: ActivityRow[], boards: BoardRow[]): Promise
         board: { id: board._id.toString(), title: board.title, color: board.color },
         card: named(cardId, cardTitles.get(cardId ?? '') ?? savedTitle(row, 'card.')),
         list: named(listId, listTitles.get(listId ?? '') ?? savedTitle(row, 'list.')),
+        ...(row.type === 'card.updated' && { fields: changedFields(row) }),
       },
     ];
   });
@@ -131,6 +139,14 @@ function listIdOf(row: Activity): string | undefined {
 // Delete events keep the title in meta, because the document itself is gone.
 function savedTitle(row: Activity, typePrefix: 'card.' | 'list.'): string | undefined {
   return row.type.startsWith(typePrefix) ? metaString(row, 'title') : undefined;
+}
+
+// Card updates record the fields they were sent (`meta.fields`). Anything unexpected in older
+// rows is left out rather than failing the whole feed.
+function changedFields(row: Activity): CardField[] {
+  const fields = row.meta.fields;
+  if (!Array.isArray(fields)) return [];
+  return fields.filter((field): field is CardField => cardFieldSchema.safeParse(field).success);
 }
 
 function metaString(row: Activity, key: string): string | undefined {

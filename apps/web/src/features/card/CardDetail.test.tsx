@@ -194,6 +194,55 @@ describe('editing', () => {
     ).toHaveTextContent('Two pages, plain words');
   });
 
+  it('saves the description when focus leaves the editor', async () => {
+    const patch = recording((body) =>
+      json(200, { card: c1({ description: String(body.description) }) }),
+    );
+    stubBoard(undefined, { 'PATCH /cards/c1': patch.handler });
+    const { dialog } = await openCard();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Edit description' }));
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Description' }), ' today');
+    await userEvent.click(within(dialog).getByRole('textbox', { name: 'New checklist item' }));
+
+    await waitFor(() => expect(patch.bodies).toEqual([{ description: 'Collect the brief today' }]));
+  });
+
+  it('saves a description being edited when the card is closed', async () => {
+    const patch = recording((body) =>
+      json(200, { card: c1({ description: String(body.description) }) }),
+    );
+    stubBoard(undefined, { 'PATCH /cards/c1': patch.handler });
+    const { dialog } = await openCard();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Edit description' }));
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Description' }), ' today');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Close card' }));
+
+    await waitFor(() => expect(patch.bodies).toEqual([{ description: 'Collect the brief today' }]));
+  });
+
+  it.each([
+    ['the Cancel button', () => userEvent.click(screen.getByRole('button', { name: 'Cancel' }))],
+    ['Escape', () => userEvent.keyboard('{Escape}')],
+  ])('throws the description draft away with %s', async (_name, discard) => {
+    const patch = recording(() => json(200, { card: c1() }));
+    stubBoard(undefined, { 'PATCH /cards/c1': patch.handler });
+    const { dialog } = await openCard();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Edit description' }));
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Description' }), ' oops');
+    await discard();
+    // Moving focus afterwards must not save the thrown-away draft either.
+    await userEvent.click(within(dialog).getByRole('textbox', { name: 'New checklist item' }));
+
+    expect(within(dialog).getByRole('button', { name: 'Edit description' })).toHaveTextContent(
+      'Collect the brief',
+    );
+    expect(patch.bodies).toEqual([]);
+    expect(screen.getByTestId('card-detail')).toBeInTheDocument();
+  });
+
   it('assigns only board members', async () => {
     const patch = recording((body) =>
       json(200, { card: c1({ assignees: body.assignees as string[] }) }),

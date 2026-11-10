@@ -1,7 +1,29 @@
-import type { ActivityItem, ActivityType } from '@taskboard/shared';
+import type { ActivityItem, ActivityType, CardField } from '@taskboard/shared';
 
 const card = (item: ActivityItem) => (item.card ? `"${item.card.title}"` : 'a card');
 const list = (item: ActivityItem) => (item.list ? `"${item.list.title}"` : 'a list');
+
+const FIELD_NAMES: Record<CardField, string> = {
+  title: 'title',
+  description: 'description',
+  labels: 'labels',
+  assignees: 'members',
+  dueDate: 'due date',
+  checklist: 'checklist',
+};
+
+/** "the due date", "the title, labels and members"; null when the entry doesn't say. */
+export function describeCardFields(fields: readonly CardField[] | undefined): string | null {
+  const names = [...new Set((fields ?? []).map((field) => FIELD_NAMES[field]))];
+  const last = names.pop();
+  if (last === undefined) return null;
+  return names.length === 0 ? `the ${last}` : `the ${names.join(', ')} and ${last}`;
+}
+
+function cardUpdated(item: ActivityItem): string {
+  const what = describeCardFields(item.fields);
+  return what ? `updated ${what} of ${card(item)}` : `updated ${card(item)}`;
+}
 
 // A Record over every type, so adding an activity type in shared fails the typecheck here
 // until it has a sentence.
@@ -13,7 +35,7 @@ const SENTENCES: Record<ActivityType, (item: ActivityItem) => string> = {
   'list.moved': (item) => `reordered list ${list(item)}`,
   'list.deleted': (item) => `deleted list ${list(item)}`,
   'card.created': (item) => `added ${card(item)} to ${list(item)}`,
-  'card.updated': (item) => `updated ${card(item)}`,
+  'card.updated': cardUpdated,
   'card.moved': (item) => `moved ${card(item)} to ${list(item)}`,
   'card.archived': (item) => `archived ${card(item)}`,
   'card.restored': (item) => `restored ${card(item)}`,
