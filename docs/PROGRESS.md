@@ -11,12 +11,16 @@ Claude reads this file at the start of every session. Keep the top block current
   - **Production incident (2026-11-09):** sign-in returned an HTML `Cannot POST /auth/login` 404. The live Vercel build still rewrote `/api/*` to `taskboard-api.onrender.com` (a stranger's Express app, so sign-ins went there). _Redeploy_ rebuilds the **same commit** as the deployment it's run on; _Create Deployment_ from `main` (`6baa979`) fixed it. Vercel env was also missing `VITE_API_URL=/api` and `ENABLE_EXPERIMENTAL_COREPACK=1` (now set).
   - Production seeded (`pnpm seed`): priya / alex demo users and "Website Redesign". The user's own seed attempt went to a different database; the root `.env` `MONGODB_URI` points at Atlas, which is what reached production.
   - Full browser test of production (register → board → lists, cards, card detail → drag + reload → invites → accept as member and viewer → live sync both ways ~0.8 s → viewer read-only + API 403 → outsider 404 → cookie flags → sign-out). All passed except the findings below.
-  - **Sample data on production:** `sam.qa@example.com` / `qa-demo-2026!` owns "Mobile App Launch" (4 lists, 10 cards, labels, due dates, checklists, comments); alex is a member and priya a viewer, so the demo login shows it under "Shared with you".
-- **Findings from the production test (being fixed in Slice 7.2):**
-  1. Sign-out in one tab doesn't reach other tabs on non-board pages (only board pages have a socket, ADR 016). They stay until reload or their next api call.
-  2. The description editor only saves on Save or Cmd/Ctrl+Enter; closing the card mid-edit drops the text silently.
-  3. Card History says "updated this card" for every change. The api already stores `meta.fields`; the activity DTO doesn't expose it.
-- **Next step:** Slice 7.2 — `.github/workflows/deploy.yml` (Render deploy hook after CI, wait for the new commit to be live, health check through Vercel), plus fixes for the three findings. Then Slice 7.3 (README and polish).
+  - **Demo data on production:** the seed now creates two boards Priya owns (Alex is a member): "Website Redesign" and "Mobile App Launch" (4 lists, labels, due dates relative to the seed run, assignees, checklists, comments). The `sam.qa@example.com` test account and its board were removed.
+  - **Slice 7.2 on `chore/deploy-pipeline`:** `/health` reports `commit` (`RENDER_GIT_COMMIT`); `.github/workflows/deploy.yml` (after CI on main: Render deploy hook with `?ref=<sha>`, wait up to 10 min for that commit, then the same check through the Vercel proxy); DEPLOY.md Step 7. Fixes for the three findings below.
+- **Findings from the production test (fixed on `chore/deploy-pipeline`):**
+  1. Sign-out didn't reach other tabs on non-board pages → `features/auth/session-sync.ts`: tabs announce sign-in, sign-out and an expired session on a `BroadcastChannel` (`taskboard:session`); a never-signed-in visitor's first 401 doesn't announce.
+  2. The description dropped unsaved text on close → it saves when focus leaves the editor (section `onBlur` + `relatedTarget`); Cancel/Escape discard, Cancel uses `onMouseDown` preventDefault; a `closed` ref stops a second save.
+  3. History said "updated this card" → activity items carry `fields` (only on `card.updated`, filtered to `cardFieldSchema`); `describeCardFields()` in `features/activity/describe.ts`.
+- **Next step:**
+  1. The user adds the `RENDER_DEPLOY_HOOK_URL` secret (DEPLOY.md Step 7) **before** merging the Slice 7.2 PR, otherwise the first Deploy run fails on the missing secret.
+  2. Merge, then watch Actions → Deploy go green (it prints `Vercel proxy reaches the new api`). Confirm `TRUST_PROXY=2` on Render.
+  3. Slice 7.3 (README and polish).
 - **Open questions / blockers:**
   - **Local `.env` points `MONGODB_URI` at production Atlas**, so `pnpm dev` reads and writes live data. Switch it back to `mongodb://localhost:27017/taskboard` (asked the user; not changed).
   - **Branch protection** on `main` needs the repo to be public (GitHub Free). Decision: make it public in Phase 7, then require PRs and the `ci`, `audit` and `e2e` checks.
