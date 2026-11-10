@@ -33,6 +33,8 @@ import {
 } from './live-events';
 import { applyDragging, applyPresence, resetLive, useLiveStore } from './live-store';
 
+/** One toast for a burst of other people's moves, showing the latest one. */
+const REMOTE_MOVE_TOAST = 'remote-move';
 export const BOARD_DELETED_MESSAGE = 'This board was deleted.';
 export const REMOVED_MESSAGE = 'You were removed from this board.';
 
@@ -152,7 +154,7 @@ export function useBoardSocket(boardId: string): void {
       if (event.name === 'card:moved' && event.payload.actorId !== userIdRef.current) {
         const detail = queryClient.getQueryData<BoardDetail>(queryKey);
         const message = detail && describeRemoteMove(detail, event.payload);
-        if (message) showToast(message, 'info');
+        if (message) showToast(message, 'info', { key: REMOTE_MOVE_TOAST });
       }
 
       const cardId = cardIdOf(event);

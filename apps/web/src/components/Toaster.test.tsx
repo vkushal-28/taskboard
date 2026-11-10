@@ -46,4 +46,39 @@ describe('Toaster', () => {
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it('replaces a toast with the same key instead of stacking, and restarts its timer', () => {
+    vi.useFakeTimers();
+    render(<Toaster />);
+
+    act(() => showToast('Alex moved "A" to Done', 'info', { key: 'remote-move' }));
+    act(() => {
+      vi.advanceTimersByTime(TOAST_DURATION_MS - 1000);
+    });
+    act(() => showToast('Alex moved "B" to Done', 'info', { key: 'remote-move' }));
+
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Alex moved "B" to Done');
+
+    // The first timer would have fired here; the replacement keeps it on screen.
+    act(() => {
+      vi.advanceTimersByTime(TOAST_DURATION_MS - 1);
+    });
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('still stacks toasts without a key', () => {
+    render(<Toaster />);
+
+    act(() => {
+      showToast('First', 'info');
+      showToast('Second', 'info');
+    });
+
+    expect(screen.getAllByRole('status')).toHaveLength(2);
+  });
 });
