@@ -1,0 +1,87 @@
+name: Deploy
+
+# Deploys the api to Render after CI passes on main, then waits until the new commit is the one
+# answering, directly and through Vercel's /api proxy. Vercel deploys the web app itself from
+# its Git integration. See docs/DEPLOY.md ("Automatic deploys").
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # Redeploy the current main by hand (Actions → Deploy → Run workflow).
+  workflow_dispatch:
+
+# One deploy at a time. A newer push waits for the running one instead of cancelling it
+# halfway through Render's build.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  API_URL: https://taskboard-api-i2je.onrender.com
+  WEB_URL: https://taskboard-murex-omega.vercel.app
+
+jobs:
+  deploy:
+    # workflow_run also fires for failed CI runs and for CI on pull requests from branches
+    # named main in forks; only a successful push to this repository's main deploys.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Trigger the Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::error::The RENDER_DEPLOY_HOOK_URL secret is not set (docs/DEPLOY.md)."
+            exit 1
+          fi
+          # The hook URL already has ?key=…; ref pins the deploy to the commit CI tested.
+          curl --fail-with-body --silent --show-error --max-time 30 -X POST "$HOOK&ref=$SHA" > /dev/null
+          echo "Render deploy of $SHA requested."
+
+      # The old version keeps answering 200 while Render builds, so wait for the commit to
+      # change, not just for a 200. The free plan builds the Docker image and may need to
+      # wake up first, hence 10 minutes.
+      - name: Wait for the api to run the new commit
+        run: |
+          deadline=$((SECONDS + 600))
+          while true; do
+            body=$(curl --silent --max-time 30 "$API_URL/health" || true)
+            commit=$(jq -r '.commit // empty' <<<"$body" 2>/dev/null || true)
+            if [ "$commit" = "$SHA" ] && [ "$(jq -r .status <<<"$body")" = "ok" ]; then
+              echo "api is live on $SHA after ${SECONDS}s: $body"
+              break
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::api did not report $SHA within 10 minutes. Last answer: ${body:-none}"
+              exit 1
+            fi
+            echo "waiting (api reports ${commit:-no commit})"
+            sleep 15
+          done
+
+      # Catches a Vercel rewrite that points somewhere else (the 2026-11-09 incident): the
+      # proxy must reach this api and get the same commit back as JSON.
+      - name: Check the api through the Vercel proxy
+        run: |
+          for attempt in 1 2 3 4 5; do
+            body=$(curl --silent --max-time 30 "$WEB_URL/api/health" || true)
+            if [ "$(jq -r '.commit // empty' <<<"$body" 2>/dev/null)" = "$SHA" ]; then
+              echo "Vercel proxy reaches the new api: $body"
+              exit 0
+            fi
+            echo "attempt $attempt: unexpected answer: ${body:0:200}"
+            sleep 10
+          done
+          echo "::error::$WEB_URL/api/health does not reach the api on $SHA. Check the rewrite in apps/web/vercel.json and that Vercel deployed the latest main (docs/DEPLOY.md, Step 4)."
+          exit 1

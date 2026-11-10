@@ -119,8 +119,8 @@ Vercel goes first because the api needs to know the site's address.
       returns `{"status":"ok","db":"connected"}`.
 - [ ] **Write down the service URL** shown at the top of the service page.
 
-> Auto-deploy is off (`autoDeployTrigger: off`). Until Slice 7.2 automates it, deploy a new
-> version with _Manual Deploy_ → _Deploy latest commit_.
+> Auto-deploy is off (`autoDeployTrigger: off`): GitHub Actions deploys after CI passes (Step 7).
+> Until that is set up, deploy with _Manual Deploy_ → _Deploy latest commit_.
 
 ## Step 4 — Connect the two (only if the Render URL differs)
 
@@ -179,6 +179,31 @@ for).
 
 Then tell me the results; we confirm `TRUST_PROXY` together in Slice 7.2.
 
+## Step 7 — Automatic deploys
+
+`.github/workflows/deploy.yml` runs after the **CI** workflow succeeds on a push to `main`:
+
+1. It calls Render's deploy hook for the exact commit CI tested (`?ref=<sha>`).
+2. It polls `https://taskboard-api-i2je.onrender.com/health` until `commit` is that SHA (up to
+   10 minutes). A plain 200 isn't enough: the old version keeps answering while Render builds.
+3. It checks `https://taskboard-murex-omega.vercel.app/api/health` returns the same commit, so a
+   Vercel rewrite pointing at the wrong service fails the run.
+
+Vercel still deploys the web app from its own Git integration. To redeploy `main` by hand: GitHub →
+_Actions_ → _Deploy_ → _Run workflow_.
+
+Set it up once:
+
+- [ ] Render → the `taskboard-api` service → _Settings_ → _Deploy Hook_ → copy the URL. **It is
+      a secret**: anyone with it can trigger deploys.
+- [ ] GitHub → the repository → _Settings_ → _Secrets and variables_ → _Actions_ → _New
+      repository secret_: name `RENDER_DEPLOY_HOOK_URL`, value the hook URL.
+- [ ] Merge something to `main` and watch _Actions_ → _Deploy_: the last step prints
+      `Vercel proxy reaches the new api`.
+
+If the Render or Vercel address changes, update `API_URL` and `WEB_URL` at the top of
+`deploy.yml`.
+
 ## Troubleshooting
 
 | What you see                                                       | Likely cause and fix                                                                                                                                                        |
@@ -194,6 +219,8 @@ Then tell me the results; we confirm `TRUST_PROXY` together in Slice 7.2.
 | Everything works except live updates (no "online" count)           | `VITE_SOCKET_URL` is wrong or missing (redeploy Vercel after fixing; `VITE_*` values are baked in at build time), or `CLIENT_URL` doesn't match (the socket checks it too). |
 | Render logs: `Invalid environment variables`                       | The message names the variable. Fix it in Render → Environment, then _Manual Deploy_.                                                                                       |
 | Render logs: `could not connect to mongodb`                        | Wrong `MONGODB_URI` (password, missing `/taskboard`), or Atlas Network Access doesn't allow `0.0.0.0/0`.                                                                    |
+| Deploy workflow: "did not report <sha> within 10 minutes"          | The Render build failed or is slow: check the deploy on Render. `commit` stays `null` if the service isn't deployed from Git.                                               |
+| Deploy workflow: "does not reach the api" (Vercel step)            | The Vercel rewrite points elsewhere, or Vercel serves an old build. Step 4.                                                                                                 |
 | The first request after a while takes long or fails                | Render's free plan was asleep. It wakes within a minute; try again.                                                                                                         |
 
 ---
