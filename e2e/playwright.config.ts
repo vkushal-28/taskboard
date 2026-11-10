@@ -14,6 +14,9 @@ const serverEnv = {
   CLIENT_URL: WEB_URL,
   JWT_ACCESS_SECRET: 'e2e-only-secret-that-is-at-least-32-characters',
   VITE_API_URL: API_URL,
+  // Every test registers its own people from this one machine; repeated runs
+  // (--repeat-each) would hit the production limit of 10 per 15 minutes.
+  AUTH_RATE_LIMIT: '1000',
 };
 
 export default defineConfig({
