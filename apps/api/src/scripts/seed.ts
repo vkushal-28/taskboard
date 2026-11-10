@@ -8,7 +8,7 @@ try {
   await connectDb(env.MONGODB_URI);
   const result = await seedDemo();
   logger.info(
-    { boardId: result.boardId, boardCreated: result.boardCreated },
+    { boards: result.boards },
     `demo ready: sign in as ${DEMO_USERS.priya.email} or ${DEMO_USERS.alex.email}`,
   );
 } catch (err) {

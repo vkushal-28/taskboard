@@ -154,7 +154,9 @@ your machine against Atlas:
 MONGODB_URI='<your Atlas MONGODB_URI>' pnpm seed
 ```
 
-- [ ] It ends with `demo ready: sign in as priya@acme.dev or alex@acme.dev`.
+- [ ] It ends with `demo ready: sign in as priya@acme.dev or alex@acme.dev`. It creates two
+      boards Priya owns (Alex is a member): **Website Redesign** and **Mobile App Launch**. Running
+      it again resets the passwords and adds a missing board, but leaves existing boards alone.
 
 Use single quotes so the shell leaves the password alone, and don't save the command in a file.
 The variable set on the command line wins over the one in `.env`, so your local database isn't
@@ -167,7 +169,7 @@ for).
 
 - [ ] Open the Vercel address. (If the api was asleep, the first sign-in can time out: wait 30 s
       and try again.)
-- [ ] _Fill in demo login_ → _Sign in_ → you see My boards with **Website Redesign**.
+- [ ] _Fill in demo login_ → _Sign in_ → you see My boards with **Website Redesign** and **Mobile App Launch**, both as Owner.
 - [ ] Open the board, then **reload the page**: it stays on the board (the SPA fallback works).
 - [ ] Drag a card to another list and reload: it stayed there.
 - [ ] **Live updates:** sign in as `alex@acme.dev` (password `demo1234!`) in a second browser,
