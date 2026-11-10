@@ -18,6 +18,11 @@ import { RefreshTokenModel } from './model.js';
 import { REFRESH_REUSE_GRACE_MS } from './service.js';
 import { hashRefreshToken } from './tokens.js';
 
+// Each refused login still runs one bcrypt compare at cost 12 (so unknown emails take as long
+// as wrong passwords). Eleven in a row take about 3.5 s locally and more on a CI runner
+// collecting coverage, past Vitest's 5 s default.
+const RATE_LIMIT_TEST_TIMEOUT_MS = 20_000;
+
 const CLIENT_ORIGIN = 'http://localhost:5173';
 
 let app: ReturnType<typeof createApp>;
@@ -176,44 +181,56 @@ describe('POST /auth/login', () => {
     expect(refresh).toMatch(/Path=\/auth/);
   });
 
-  it('counts each client separately behind a trusted proxy', async () => {
-    // One proxy hop, as on Render: req.ip comes from X-Forwarded-For.
-    const proxied = createApp({ trustProxy: 1 });
-    const attempt = (ip: string) =>
-      request(proxied)
-        .post('/auth/login')
-        .set('X-Forwarded-For', ip)
-        .send({ email: 'nobody@example.com', password: 'x' });
+  it(
+    'counts each client separately behind a trusted proxy',
+    async () => {
+      // One proxy hop, as on Render: req.ip comes from X-Forwarded-For.
+      const proxied = createApp({ trustProxy: 1 });
+      const attempt = (ip: string) =>
+        request(proxied)
+          .post('/auth/login')
+          .set('X-Forwarded-For', ip)
+          .send({ email: 'nobody@example.com', password: 'x' });
 
-    for (let i = 0; i < 10; i++) expect((await attempt('203.0.113.1')).status).toBe(401);
+      for (let i = 0; i < 10; i++) expect((await attempt('203.0.113.1')).status).toBe(401);
 
-    expect((await attempt('203.0.113.1')).status).toBe(429);
-    expect((await attempt('203.0.113.2')).status).toBe(401);
-  });
+      expect((await attempt('203.0.113.1')).status).toBe(429);
+      expect((await attempt('203.0.113.2')).status).toBe(401);
+    },
+    RATE_LIMIT_TEST_TIMEOUT_MS,
+  );
 
-  it('ignores X-Forwarded-For when no proxy is trusted', async () => {
-    const attempt = (ip: string) =>
-      request(app)
-        .post('/auth/login')
-        .set('X-Forwarded-For', ip)
-        .send({ email: 'nobody@example.com', password: 'x' });
+  it(
+    'ignores X-Forwarded-For when no proxy is trusted',
+    async () => {
+      const attempt = (ip: string) =>
+        request(app)
+          .post('/auth/login')
+          .set('X-Forwarded-For', ip)
+          .send({ email: 'nobody@example.com', password: 'x' });
 
-    for (let i = 0; i < 10; i++) expect((await attempt(`203.0.113.${i}`)).status).toBe(401);
+      for (let i = 0; i < 10; i++) expect((await attempt(`203.0.113.${i}`)).status).toBe(401);
 
-    // A client faking a new address each time still shares one counter.
-    expect((await attempt('203.0.113.99')).status).toBe(429);
-  });
+      // A client faking a new address each time still shares one counter.
+      expect((await attempt('203.0.113.99')).status).toBe(429);
+    },
+    RATE_LIMIT_TEST_TIMEOUT_MS,
+  );
 
-  it('rate limits after 10 attempts in the window', async () => {
-    const attempt = () =>
-      request(app).post('/auth/login').send({ email: 'nobody@example.com', password: 'x' });
+  it(
+    'rate limits after 10 attempts in the window',
+    async () => {
+      const attempt = () =>
+        request(app).post('/auth/login').send({ email: 'nobody@example.com', password: 'x' });
 
-    for (let i = 0; i < 10; i++) expect((await attempt()).status).toBe(401);
-    const res = await attempt();
+      for (let i = 0; i < 10; i++) expect((await attempt()).status).toBe(401);
+      const res = await attempt();
 
-    expect(res.status).toBe(429);
-    expect(errorOf(res).code).toBe('TOO_MANY_REQUESTS');
-  });
+      expect(res.status).toBe(429);
+      expect(errorOf(res).code).toBe('TOO_MANY_REQUESTS');
+    },
+    RATE_LIMIT_TEST_TIMEOUT_MS,
+  );
 });
 
 describe('POST /auth/refresh', () => {

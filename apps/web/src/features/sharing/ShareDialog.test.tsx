@@ -254,6 +254,38 @@ describe('invites', () => {
     );
     await waitFor(() => expect(within(dialog).queryByTestId('invite-i2')).toBeNull());
     expect(revoked.bodies).toHaveLength(1);
+    // Revoking a different invite leaves this link alone.
+    expect(within(dialog).getByRole('textbox', { name: 'Invite link' })).toHaveValue(`${LINK}-new`);
+  });
+
+  it('stops showing a link once its invite is revoked', async () => {
+    let invites = [invite('i1', 'sam@example.com', 7)];
+    stubApi({
+      'GET /auth/me': () => json(200, { user: priya }),
+      'GET /boards/b1': () => json(200, boardDetail('owner')),
+      'GET /boards/b1/invites': () => json(200, { invites }),
+      'POST /boards/b1/invites/i1/resend': () =>
+        json(200, { invite: invite('i1', 'sam@example.com', 7), link: LINK, emailed: false }),
+      'DELETE /boards/b1/invites/i1': () => {
+        invites = [];
+        return new Response(null, { status: 204 });
+      },
+    });
+    const { dialog } = await openShare();
+
+    await userEvent.click(
+      await within(dialog).findByRole('button', { name: 'Resend invite to sam@example.com' }),
+    );
+    await within(dialog).findByRole('textbox', { name: 'Invite link' });
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Revoke invite to sam@example.com' }),
+    );
+
+    await waitFor(() =>
+      expect(within(dialog).queryByRole('textbox', { name: 'Invite link' })).toBeNull(),
+    );
+    expect(within(dialog).queryByText(/Send this link to/)).toBeNull();
   });
 });
 

@@ -43,7 +43,7 @@ export function ListColumn({ boardId, list, cards, members, canEdit }: ListColum
 
       <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
         <ol
-          className={`min-h-12 flex-1 space-y-2 overflow-y-auto px-3 pb-2 ${
+          className={`min-h-12 flex-1 space-y-2 overflow-y-auto px-3 pt-1 pb-2 ${
             isOver && cards.length === 0 ? 'rounded-lg bg-indigo-50' : ''
           }`}
         >
@@ -56,6 +56,15 @@ export function ListColumn({ boardId, list, cards, members, canEdit }: ListColum
               disabled={!canEdit}
             />
           ))}
+          {cards.length === 0 && (
+            // Inside the drop zone so it shows where a card would land; not a list item.
+            <li
+              aria-hidden="true"
+              className="pointer-events-none rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500"
+            >
+              {canEdit ? 'No cards yet. Add one or drop one here.' : 'No cards yet.'}
+            </li>
+          )}
         </ol>
       </SortableContext>
 

@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Avatar } from '../../components/Avatar';
 import { Dialog } from '../../components/Dialog';
+import { FeedSkeleton } from '../../components/FeedSkeleton';
 import { describeError } from '../../lib/api-error';
 import { useNow } from '../../lib/time';
 import { useAuth } from '../auth/api';
@@ -29,6 +30,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The link from the last create or resend. The api returns it once, so it lives here only. */
 interface IssuedLink {
+  inviteId: string;
   email: string;
   link: string;
   emailed: boolean;
@@ -55,12 +57,15 @@ export function ShareButton({ board }: { board: BoardDetail['board'] }) {
 
 function ShareContent({ board }: { board: BoardDetail['board'] }) {
   const [issued, setIssued] = useState<IssuedLink | null>(null);
+  // A revoked invite's link is dead, so stop offering it.
+  const forgetIfShown = (inviteId: string) =>
+    setIssued((current) => (current?.inviteId === inviteId ? null : current));
   return (
     <div className="space-y-6" data-testid="share-dialog">
       <InviteForm boardId={board.id} onIssued={setIssued} />
       {issued && <IssuedLinkBox issued={issued} />}
       <MemberList board={board} />
-      <PendingInvites boardId={board.id} onIssued={setIssued} />
+      <PendingInvites boardId={board.id} onIssued={setIssued} onRevoked={forgetIfShown} />
     </div>
   );
 }
@@ -88,7 +93,7 @@ function InviteForm({
     setServerError(null);
     try {
       const { invite, link, emailed } = await createInvite.mutateAsync(input);
-      onIssued({ email: invite.email, link, emailed });
+      onIssued({ inviteId: invite.id, email: invite.email, link, emailed });
       reset();
     } catch (error) {
       setServerError(describeError(error));
@@ -253,13 +258,15 @@ function MemberRow({
 function PendingInvites({
   boardId,
   onIssued,
+  onRevoked,
 }: {
   boardId: string;
   onIssued: (issued: IssuedLink) => void;
+  onRevoked: (inviteId: string) => void;
 }) {
   const invites = useInvites(boardId);
   const now = useNow();
-  if (invites.isPending) return <p className="text-sm text-slate-500">Loading invites…</p>;
+  if (invites.isPending) return <FeedSkeleton label="Loading invites" rows={2} />;
   if (invites.isError) return <p className="text-sm text-red-600">Could not load invites.</p>;
   if (invites.data.length === 0) return null;
 
@@ -276,6 +283,7 @@ function PendingInvites({
             invite={invite}
             now={now}
             onIssued={onIssued}
+            onRevoked={onRevoked}
           />
         ))}
       </ul>
@@ -288,11 +296,13 @@ function InviteRow({
   invite,
   now,
   onIssued,
+  onRevoked,
 }: {
   boardId: string;
   invite: InviteDto;
   now: number;
   onIssued: (issued: IssuedLink) => void;
+  onRevoked: (inviteId: string) => void;
 }) {
   const resend = useResendInvite(boardId);
   const revoke = useRevokeInvite(boardId);
@@ -323,7 +333,7 @@ function InviteRow({
           onClick={() =>
             void run(async () => {
               const { link, emailed } = await resend.mutateAsync(invite.id);
-              onIssued({ email: invite.email, link, emailed });
+              onIssued({ inviteId: invite.id, email: invite.email, link, emailed });
             })
           }
           aria-label={`Resend invite to ${invite.email}`}
@@ -334,7 +344,12 @@ function InviteRow({
         <button
           type="button"
           disabled={busy}
-          onClick={() => void run(() => revoke.mutateAsync(invite.id).then(() => undefined))}
+          onClick={() =>
+            void run(async () => {
+              await revoke.mutateAsync(invite.id);
+              onRevoked(invite.id);
+            })
+          }
           aria-label={`Revoke invite to ${invite.email}`}
           className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
         >

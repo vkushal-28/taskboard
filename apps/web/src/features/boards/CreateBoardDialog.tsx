@@ -8,7 +8,7 @@ import { TextField } from '../../components/TextField';
 import { describeError } from '../../lib/api-error';
 import { useCreateBoard } from './api';
 
-export const BOARD_COLORS = [
+const BOARD_COLORS = [
   { value: DEFAULT_BOARD_COLOR, name: 'Blue' },
   { value: '#7c3aed', name: 'Violet' },
   { value: '#db2777', name: 'Pink' },

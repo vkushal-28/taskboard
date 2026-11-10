@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router';
 import { FullPageSpinner } from '../../components/FullPageSpinner';
 import { useAuth } from './api';
 
-export interface RedirectState {
+interface RedirectState {
   from?: string;
 }
 
