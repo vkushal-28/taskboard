@@ -1,6 +1,6 @@
 import type { ActivityItem, ActivityType } from '@taskboard/shared';
 import { describe, expect, it } from 'vitest';
-import { describeActivity } from './describe';
+import { describeActivity, describeCardFields } from './describe';
 
 function item(type: ActivityType, names: { card?: string; list?: string } = {}): ActivityItem {
   return {
@@ -36,5 +36,24 @@ describe('describeActivity', () => {
 
   it('falls back to "a card" and "a list" when the names are gone', () => {
     expect(describeActivity(item('card.moved'))).toBe('moved a card to a list');
+  });
+});
+
+describe('describeCardFields', () => {
+  it.each<[Parameters<typeof describeCardFields>[0], string | null]>([
+    [['dueDate'], 'the due date'],
+    [['title', 'description'], 'the title and description'],
+    [['labels', 'assignees', 'checklist'], 'the labels, members and checklist'],
+    [['checklist', 'checklist'], 'the checklist'],
+    [[], null],
+    [undefined, null],
+  ])('%j reads %j', (fields, words) => {
+    expect(describeCardFields(fields)).toBe(words);
+  });
+
+  it('names the fields in the board feed', () => {
+    expect(describeActivity({ ...item('card.updated', both), fields: ['assignees'] })).toBe(
+      'updated the members of "Login page"',
+    );
   });
 });
