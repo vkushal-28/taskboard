@@ -126,7 +126,7 @@ export function BoardCanvas({ detail }: { detail: BoardDetail }) {
         ))}
 
         {canEdit && (
-          <div className="w-72 shrink-0 rounded-xl bg-slate-100/70 p-3">
+          <div className="w-72 shrink-0 rounded-xl border-2 border-dashed border-slate-300 p-3">
             <InlineAddForm
               openLabel="Add a list"
               fieldLabel="List title"

@@ -30,13 +30,15 @@ export function ListColumn({ boardId, list, cards, members, canEdit }: ListColum
       ref={setNodeRef}
       aria-labelledby={headingId}
       data-testid={`list-${list.id}`}
-      className="flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100"
+      className="flex max-h-full w-72 shrink-0 flex-col rounded-xl border border-slate-300/60 bg-slate-200/70 shadow-sm"
     >
       <header className="flex items-center justify-between px-3 pt-3 pb-2">
         <h2 id={headingId} className="text-sm font-semibold text-slate-800">
           {list.title}
         </h2>
-        <span className="text-xs text-slate-500">{cards.length}</span>
+        <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-medium text-slate-600">
+          {cards.length}
+        </span>
       </header>
 
       <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>

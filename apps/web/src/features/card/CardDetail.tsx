@@ -1,5 +1,6 @@
 import type { BoardMemberDto, CardDto } from '@taskboard/shared';
 import { Avatar } from '../../components/Avatar';
+import { DUE_BADGE_CLASSES, DUE_STATUS_TEXT, dueStatus } from '../../lib/due-date';
 import { useNow } from '../../lib/time';
 import { CardActivity } from './CardActivity';
 import { CardChecklist } from './CardChecklist';
@@ -32,7 +33,7 @@ export function CardDetail({
 }: CardDetailProps) {
   const now = useNow();
   const assignees = members.filter((member) => card.assignees.includes(member.id));
-  const overdue = card.dueDate !== null && Date.parse(card.dueDate) < now;
+  const due = card.dueDate === null ? null : dueStatus(card.dueDate, now);
 
   return (
     <div data-testid="card-detail">
@@ -91,14 +92,10 @@ export function CardDetail({
                   <dd className="mt-1 text-sm">
                     <time
                       dateTime={card.dueDate}
-                      className={
-                        overdue
-                          ? 'rounded bg-red-50 px-1.5 py-0.5 font-medium text-red-700'
-                          : 'text-slate-800'
-                      }
+                      className={`inline-block rounded px-1.5 py-0.5 font-medium ring-1 ring-inset ${DUE_BADGE_CLASSES[due ?? 'later']}`}
                     >
                       {dueFormatter.format(Date.parse(card.dueDate))}
-                      {overdue && ' · Overdue'}
+                      {due && DUE_STATUS_TEXT[due] && ` · ${DUE_STATUS_TEXT[due]}`}
                     </time>
                   </dd>
                 </div>

@@ -24,7 +24,7 @@ export function InlineAddForm(props: InlineAddFormProps) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
+        className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-600 hover:bg-slate-300/50 hover:text-slate-900"
       >
         + {props.openLabel}
       </button>
@@ -93,7 +93,7 @@ function ExpandedForm({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-200/60"
+          className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-300/50"
         >
           Cancel
         </button>

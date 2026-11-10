@@ -1,1 +1,26 @@
 @import 'tailwindcss';
+
+/*
+ * Tailwind v4 resets buttons to the default cursor. Give every clickable control the pointer
+ * back, and disabled ones "not-allowed". Utilities (cursor-grab on cards) still win over @layer base.
+ */
+@layer base {
+  button,
+  [role='button'],
+  summary,
+  select,
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='color'],
+  label:has(input[type='checkbox'], input[type='radio']) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'],
+  select:disabled,
+  input:disabled,
+  label:has(input:disabled) {
+    cursor: not-allowed;
+  }
+}
