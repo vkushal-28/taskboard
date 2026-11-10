@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { Avatar } from '../../components/Avatar';
+import { DUE_BADGE_CLASSES, DUE_STATUS_TEXT, dueStatus } from '../../lib/due-date';
 import { useNow } from '../../lib/time';
 import { useLiveStore } from './live-store';
 
@@ -19,7 +20,7 @@ export function CardTile({ card, members }: CardTileProps) {
   const done = card.checklist.filter((item) => item.done).length;
   const assignees = card.assignees.flatMap((id) => members.get(id) ?? []);
   const now = useNow();
-  const overdue = card.dueDate !== null && Date.parse(card.dueDate) < now;
+  const due = card.dueDate === null ? null : dueStatus(card.dueDate, now);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm">
@@ -43,12 +44,12 @@ export function CardTile({ card, members }: CardTileProps) {
         card.commentCount > 0 ||
         assignees.length > 0) && (
         <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
-          {card.dueDate && (
+          {card.dueDate && due && (
             <time
               dateTime={card.dueDate}
-              className={overdue ? 'rounded bg-red-50 px-1 font-medium text-red-700' : undefined}
+              className={`rounded px-1.5 py-0.5 font-medium ring-1 ring-inset ${DUE_BADGE_CLASSES[due]}`}
             >
-              {overdue ? 'Overdue · ' : 'Due '}
+              {DUE_STATUS_TEXT[due] ? `${DUE_STATUS_TEXT[due]} · ` : 'Due '}
               {dueFormatter.format(Date.parse(card.dueDate))}
             </time>
           )}
