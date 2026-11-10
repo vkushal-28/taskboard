@@ -4,19 +4,23 @@ Claude reads this file at the start of every session. Keep the top block current
 
 ## Next session starts here
 
-- **Current phase:** Phase 6 — Testing and CI hardening. **All slices done (6.1, 6.1b, 6.2, 6.3) plus `/review-phase` fixes; PR #9 open with CI green.** Phase 5 (PR #8) is merged.
-- **Branch:** `test/hardening`, pushed, **PR #9** (https://github.com/vkushal-28/taskboard/pull/9). The PR description follows the review skill's format (What, Why, How to test, Checklist, Known gaps).
+- **Current phase:** Phase 7 — Deploy, seed data, README. Slice 7.1 is done and live; Slice 7.2 is in progress on `chore/deploy-pipeline`. Phase 6 (PR #9) is merged.
+- **Live:** web https://taskboard-murex-omega.vercel.app, api https://taskboard-api-i2je.onrender.com (Render added `-i2je`: `taskboard-api` was taken by someone else's service).
 - **Last thing done:**
-  - **6.1:** v8 coverage for the api (`pnpm --filter @taskboard/api test:coverage`, thresholds 90/90/90 and 80% branches; today 98% lines, 88% branches). New tests found and fixed three bugs: the `board:join` / member-removal race (the role is re-read after `socket.join`), a failed join that left the socket in the room, and same-role changes that weren't no-ops (Mongoose `updatedAt` made `modifiedCount` 1; fixed with `timestamps: false`).
-  - **6.1b (ADR 016):** access tokens carry `sid` (the refresh family). Sockets join `session:<sid>`; `revokeFamily()` (logout, reuse detection) calls `disconnectSession()`. On connection the server joins the session room, then checks `isSessionActive(sid)` and disconnects if no active refresh token remains; messages wait for that answer. Web: `io server disconnect` → `recoverSession()` → sign out or reconnect. Browser check: signing out in one tab sent the other to sign-in in 63 ms.
-  - **6.2:** `e2e/` workspace with Playwright (card created, dragged to another list, survives a reload). The RTL tests the slice asked for already existed.
-  - **6.3:** CI has three jobs (`ci`, `audit`, `e2e`), Dependabot, `body-parser` 2.4.0 security fix. CI run: ci 2m22s, e2e 1m14s, audit 12s.
-  - 656 tests (api 452, web 193, shared 10, e2e 1).
-- **Next step:**
-  1. The user merges PR #9.
-  2. Then Phase 7 — Deploy, seed data, README, Slice 7.1 (from `main`, branch `chore/deploy`).
+  - PR #13 (`chore/deploy`): Vercel + Render config, `/api` proxy and a separate socket URL, single-use socket tickets (ADR 018), `docs/DEPLOY.md`. PR #14: the Vercel rewrite points at the real Render URL. PR #15: DEPLOY.md uses the real URLs and explains stale rewrites.
+  - **Production incident (2026-11-09):** sign-in returned an HTML `Cannot POST /auth/login` 404. The live Vercel build still rewrote `/api/*` to `taskboard-api.onrender.com` (a stranger's Express app, so sign-ins went there). _Redeploy_ rebuilds the **same commit** as the deployment it's run on; _Create Deployment_ from `main` (`6baa979`) fixed it. Vercel env was also missing `VITE_API_URL=/api` and `ENABLE_EXPERIMENTAL_COREPACK=1` (now set).
+  - Production seeded (`pnpm seed`): priya / alex demo users and "Website Redesign". The user's own seed attempt went to a different database; the root `.env` `MONGODB_URI` points at Atlas, which is what reached production.
+  - Full browser test of production (register → board → lists, cards, card detail → drag + reload → invites → accept as member and viewer → live sync both ways ~0.8 s → viewer read-only + API 403 → outsider 404 → cookie flags → sign-out). All passed except the findings below.
+  - **Sample data on production:** `sam.qa@example.com` / `qa-demo-2026!` owns "Mobile App Launch" (4 lists, 10 cards, labels, due dates, checklists, comments); alex is a member and priya a viewer, so the demo login shows it under "Shared with you".
+- **Findings from the production test (being fixed in Slice 7.2):**
+  1. Sign-out in one tab doesn't reach other tabs on non-board pages (only board pages have a socket, ADR 016). They stay until reload or their next api call.
+  2. The description editor only saves on Save or Cmd/Ctrl+Enter; closing the card mid-edit drops the text silently.
+  3. Card History says "updated this card" for every change. The api already stores `meta.fields`; the activity DTO doesn't expose it.
+- **Next step:** Slice 7.2 — `.github/workflows/deploy.yml` (Render deploy hook after CI, wait for the new commit to be live, health check through Vercel), plus fixes for the three findings. Then Slice 7.3 (README and polish).
 - **Open questions / blockers:**
-  - **Branch protection** on `main` (a Phase 6 exit criterion) isn't possible on a private repo without GitHub Pro (403). Decision: make the repo public (Phase 7, it's a portfolio project), then require PRs and the `ci`, `audit` and `e2e` checks.
+  - **Local `.env` points `MONGODB_URI` at production Atlas**, so `pnpm dev` reads and writes live data. Switch it back to `mongodb://localhost:27017/taskboard` (asked the user; not changed).
+  - **Branch protection** on `main` needs the repo to be public (GitHub Free). Decision: make it public in Phase 7, then require PRs and the `ci`, `audit` and `e2e` checks.
+  - `TRUST_PROXY=2` still to be confirmed on Render (Slice 7.2).
   - Still optional: an absolute session lifetime (deferred Phase 1 findings); a "leave board" action.
 - **Notes for Claude:**
   - **Phase 6 additions (read first):**
@@ -170,8 +174,8 @@ Claude reads this file at the start of every session. Keep the top block current
 - [x] Phase 3 — Frontend shell and board UI (PR #4, review fixes PR #5, merged)
 - [x] Phase 4 — Real-time sync and presence (PR #6, review fixes PR #7, merged)
 - [x] Phase 5 — Card detail, comments, activity, invites (PR #8, merged)
-- [ ] Phase 6 — Testing and CI hardening (all slices done on `test/hardening`; PR #9 open, CI green)
-- [ ] Phase 7 — Deploy, seed data, README
+- [x] Phase 6 — Testing and CI hardening (PR #9, merged)
+- [ ] Phase 7 — Deploy, seed data, README (7.1 done: PRs #13–#15; 7.2 in progress)
 
 ## Session log (newest first)
 
