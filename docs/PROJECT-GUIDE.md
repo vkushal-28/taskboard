@@ -4,7 +4,7 @@ This document explains **what** we are building, **how** we are building it, and
 
 It is a standalone explanation. Nothing in the code depends on it.
 
-_Last updated: 2026-11-04 (Phases 0 to 6 done)._
+_Last updated: 2026-11-10 (all phases done; the app is live)._
 
 ---
 
@@ -20,7 +20,7 @@ _Last updated: 2026-11-04 (Phases 0 to 6 done)._
 8. [Phase 4 — Live updates and presence (done)](#8-phase-4--live-updates-and-presence-done)
 9. [Phase 5 — Card details, comments and sharing (done)](#9-phase-5--card-details-comments-and-sharing-done)
 10. [Phase 6 — Testing and automatic checks (done)](#10-phase-6--testing-and-automatic-checks-done)
-11. [Phases still to come](#11-phases-still-to-come)
+11. [Phase 7 — Live on the internet, and polish (done)](#11-phase-7--live-on-the-internet-and-polish-done)
 12. [Every tool and package, and why](#12-every-tool-and-package-and-why)
 13. [Decisions we wrote down (ADRs)](#13-decisions-we-wrote-down-adrs)
 14. [Glossary](#14-glossary)
@@ -490,11 +490,39 @@ Every pull request now runs three jobs at the same time, in about two and a half
 
 ---
 
-## 11. Phases still to come
+## 11. Phase 7 — Live on the internet, and polish (done)
 
-| Phase                     | What it adds                                                                                                                     |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **7 — Deploy and polish** | Live on Render (api) + Vercel (web) + MongoDB Atlas, automatic deploys from `main`, demo data, README, loading and empty states. |
+**Goal:** put Taskboard online so anyone can try it, deploy every change automatically, fill it with believable demo data, and finish it off: a README and a round of small improvements.
+
+**Live:** https://taskboard-murex-omega.vercel.app — sign in as `priya@acme.dev` with `demo1234!`.
+
+### Slice 7.1 — Ready for production (done)
+
+- **Three free services:** the web app on **Vercel**, the api on **Render**, and the database on **MongoDB Atlas**. `docs/DEPLOY.md` is the step-by-step guide.
+- **The cookie problem:** Vercel and Render live on different websites, so a login cookie from the api would be a "third-party" cookie, which Safari and Firefox block. Sign-in would seem to work, then every page would fail. So the browser only ever talks to the Vercel address, and Vercel quietly forwards `/api/...` to Render. The cookies are then first-party everywhere (ADR 018).
+- **The live connection** can't be forwarded by Vercel, so it goes to Render directly and signs in with a short-lived one-time ticket that the page fetches first.
+- **Behind proxies:** the api is told how many proxies stand in front of it, so it sees each visitor's real address. That matters for the login rate limit: without it, every visitor would share one limit.
+
+### Slice 7.2 — Automatic deploys and demo data (done)
+
+- **Deploys:** after the checks pass on `main`, GitHub tells Render to deploy, then waits until the api reports **the new version's commit**. Waiting for any "OK" isn't enough: the old version keeps answering while the new one builds. It also checks through the Vercel address, because that's what users reach (ADR 019). Vercel deploys the web app by itself.
+- **The outage that taught us that:** on 9 November sign-in broke because the forwarding rule pointed at someone else's Render service with a similar name. Render itself was healthy, so only a check through Vercel would have caught it.
+- **Demo data:** a seed script creates Priya (owner), Alex, Jordan and Sofia, and three boards with labels, due dates, checklists and comments.
+- **Signing in or out in one tab** now updates your other tabs straight away, on every page (ADR 020).
+- Smaller fixes found by walking through the live site: the description saves when you click away, history says which fields changed, and closing a card after archiving it goes back to the board.
+
+### Slice 7.3 — README and polish (done)
+
+- **README:** what the app does, the live demo and login, real screenshots, an architecture diagram, the tools and why, how to run it in three commands, tests, automatic checks, and links to every decision record.
+- **Look and feel:** a small live-board picture on the sign-in page, lists that stand out from the page, due dates coloured green, amber or red by how close they are, the pointer cursor on everything clickable, grey placeholder rows while things load, and helpful text when a list, board or comment thread is empty.
+- **Keyboard and screen readers:** a visible focus ring on everything you can tab to; cards read out their labels, due date, checklist and assignees; "Alex is moving this" is announced; the account menu closes with Esc or a click outside.
+- **Small fixes:** a cancelled invite's link disappears from the Share dialog, and a burst of other people's moves shows one message instead of a pile.
+
+**How we tested it:** 733 automated tests (api 481, web 242, shared 10) plus 5 browser tests (sign-up to card, two people live, a viewer, signing out across tabs), all passing on GitHub, and walkthroughs of the live site.
+
+### What could come next
+
+Running more than one api server (it needs a shared channel for live updates), limits on board size, board filters, dragging lists, GitHub sign-in, and invite emails from a real domain.
 
 ---
 
@@ -564,12 +592,14 @@ Every pull request now runs three jobs at the same time, in about two and a half
 
 ### Infrastructure
 
-| Tool                                     | Why                                                                                        |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Docker** + **Docker Compose**          | Runs MongoDB (and optionally the whole app) identically on every machine with one command. |
-| **GitHub Actions**                       | Runs the checks (ci, audit, e2e) on every pull request and on `main`.                      |
-| **Dependabot**                           | Opens weekly pull requests for package and GitHub Actions updates.                         |
-| _Planned:_ Render, Vercel, MongoDB Atlas | Hosting for the api, the web app, and the database.                                        |
+| Tool                            | Why                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Docker** + **Docker Compose** | Runs MongoDB (and optionally the whole app) identically on every machine with one command. |
+| **GitHub Actions**              | Runs the checks (ci, audit, e2e) on every pull request and on `main`.                      |
+| **Dependabot**                  | Opens weekly pull requests for package and GitHub Actions updates.                         |
+| **Render**                      | Runs the api from its Docker image, deployed by GitHub after the checks pass.              |
+| **Vercel**                      | Hosts the web app and forwards `/api` to Render, so login cookies are first-party.         |
+| **MongoDB Atlas**               | The production database (free M0 cluster, no automatic backups).                           |
 
 ---
 
@@ -596,6 +626,9 @@ An **ADR** (Architecture Decision Record) is a short document that records an im
 | 015 | Invite links and the last owner         | Invite links work once, for 7 days, only for the invited email, and are stored as hashes; a board can never lose its last owner.       |
 | 016 | Live connections end with the session   | Each live connection belongs to a login session; ending the session closes them, and an ended session can't open new ones.             |
 | 017 | E2E tests on their own copy of the app  | The browser test starts its own api, web app and database, so it never touches your data or a running dev server.                      |
+| 018 | The api behind the web app's address    | Vercel forwards `/api` to Render, so login cookies are first-party and Safari and Firefox don't block them.                            |
+| 019 | Deploy waits for the new commit         | After a merge, the deploy only counts as done when the api reports the merged commit, checked directly and through Vercel.             |
+| 020 | Sessions in sync across tabs            | Tabs tell each other about sign-in and sign-out over a browser channel, so no tab keeps showing the wrong person's data.               |
 
 ---
 
