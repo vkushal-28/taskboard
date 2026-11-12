@@ -20,7 +20,42 @@ of a write that already happened. Access is per board, with three roles: viewer 
 | `apps/web`        | One folder per screen or feature in `src/features/<feature>/`: pages, components and the `api.ts` hooks that call the api.           |
 | `e2e`             | Playwright tests that drive the real app in a browser, on their own ports and database (ADR 017).                                    |
 
-## 3. Life of a request: moving a card
+## 3. The api in MVC terms
+
+Every feature folder in `apps/api/src/modules/` is a small MVC unit, with a service layer between
+the controller and the model. A request passes through the files top to bottom:
+
+| Part       | File            | Its only job                                                                      | In the cards module                                      |
+| ---------- | --------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Route      | `routes.ts`     | Maps a URL to the middleware chain (auth, role, validation) and a controller.     | `PATCH /cards/:cardId/move` → `controller.moveCard`      |
+| Controller | `controller.ts` | Reads the request, calls the service, sends the status and JSON. No rules, no DB. | `moveCard` reads `cardId` and the body                   |
+| Service    | `service.ts`    | The business rules: checks, database writes, activity log, broadcast.             | `moveCard` checks the neighbours and writes one position |
+| Model      | `model.ts`      | The Mongoose schema and indexes: what a document looks like in MongoDB.           | `CardModel`                                              |
+| View       | `model.ts`      | A `to…Dto()` function: the exact JSON that leaves the server (never secrets).     | `toCardDto()`                                            |
+
+An api has no HTML pages, so its "view" is the JSON it sends. Keeping that in one function per
+model means a field like a password hash can never leak by accident.
+
+**Why feature folders and not top-level `controllers/` and `models/` folders?** Everything about
+cards lives in `modules/cards/`, so a change to cards touches one folder, and a reviewer sees the
+whole feature at once. This is the "structure by components" layout most Node.js guides recommend.
+
+**A module only has the layers it needs:**
+
+- `users/`: model only. Accounts are created and read through `auth/`.
+- `members/`: no model. Members live inside the board document (ADR 005), so it uses `BoardModel`.
+- `auth/`: also `tokens.ts` (JWTs and refresh tokens) and `cookies.ts` (cookie flags).
+- `boards/`: also `access.ts`, which finds the board behind a list or card for `requireBoardRole`.
+- `activity/`: also `record-write.ts`, the "log, then broadcast" step every write ends with.
+- `realtime/`: the Socket.IO server (`server.ts`), the broadcaster (`emitter.ts`) and a message
+  limit (`rate-limit.ts`). Its model and service hold the one-time socket tickets (ADR 018).
+- `demo/`: the demo data, run by `src/scripts/seed.ts`.
+
+Outside the modules: `middleware/` (auth, role, validation, Origin check, errors), `lib/`
+(helpers with no business meaning: logger, hashing, pagination, positions, email), `config/`
+(validated env), `db/` (connection), `app.ts` (builds the app) and `server.ts` (starts it).
+
+## 4. Life of a request: moving a card
 
 This one flow uses almost every part of the system.
 
@@ -48,7 +83,7 @@ sequenceDiagram
 If the api refuses (a 409 because someone else changed the list, or a 403 for a viewer), Alice's
 browser puts the old board back and shows a toast.
 
-## 4. Ten rules the code follows
+## 5. Ten rules the code follows
 
 1. **Layers:** routes → controller → service → model. Controllers never touch Mongoose; services
    hold the business rules.
@@ -73,7 +108,7 @@ browser puts the old board back and shows a toast.
 10. **Errors have one shape:** throw an `AppError` subclass (`NotFound`, `Forbidden`, …) and the
     error handler answers `{ error: { code, message, details? } }`.
 
-## 5. Security in brief
+## 6. Security in brief
 
 - **Login:** a 15-minute access token and a 7-day refresh token, both in httpOnly cookies that
   JavaScript can't read. Each refresh replaces the refresh token; reusing an old one revokes the
@@ -86,7 +121,7 @@ browser puts the old board back and shows a toast.
   as SHA-256; passwords as bcrypt. Logs redact passwords, tokens and cookies.
 - **Rate limits** on login, register, refresh, invites, socket tickets and socket messages.
 
-## 6. Adding a new write endpoint: checklist
+## 7. Adding a new write endpoint: checklist
 
 1. Request and response schemas in `packages/shared`.
 2. Route with `requireAuth` → `requireBoardRole(minRole)` → `validateBody(schema)`.
@@ -97,14 +132,14 @@ browser puts the old board back and shows a toast.
 6. Tests: a row in `docs/permissions.md` and in `ENDPOINTS` in `apps/api/src/rbac.test.ts`, a row
    in the `writes` table in `modules/realtime/realtime.test.ts`, plus the feature's own tests.
 
-## 7. Known limits
+## 8. Known limits
 
 - No caps on lists or cards per board, and `GET /boards` isn't paged.
 - One api instance. A second one would need the Socket.IO Redis adapter (ADR 012, 015).
 - A socket's `board:join` that times out is only retried on the next reconnect.
 - Two simultaneous archives of the same card both log "archived".
 
-## 8. Reading the ADRs
+## 9. Reading the ADRs
 
 Start with **004, 005, 006, 007 and 011**: together they explain most of the design. Then read
 by topic: realtime (010–014), sharing (015), deployment (017–019). Read the Decision and

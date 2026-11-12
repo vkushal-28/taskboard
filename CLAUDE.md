@@ -36,7 +36,7 @@ Run the /wrap-up skill: update docs/PROGRESS.md, then commit.
 
 ## Code style
 
-- Feature folders: apps/api/src/modules/<feature>/{routes,controller,service,model,schemas,*.test}.ts
+- Feature folders: apps/api/src/modules/<feature>/{routes,controller,service,model,*.test}.ts, with only the layers a module needs. Zod schemas live in packages/shared. The `to…Dto()` mapper (the JSON "view") sits in model.ts.
 - apps/web/src/features/<feature>/ for pages, components and hooks of one feature
 - Named exports. Small functions. Descriptive names over comments.
 - Tests live next to the code as *.test.ts(x). Every feature ships with tests.
