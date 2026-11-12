@@ -35,6 +35,9 @@ window as **`alex@acme.dev`** (same password) to watch changes sync live.
 
 ## Architecture
 
+New to the code? [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is a 5-minute tour: the life of a
+request, the rules the code follows, and a checklist for adding an endpoint.
+
 ```mermaid
 flowchart LR
   subgraph Browser
