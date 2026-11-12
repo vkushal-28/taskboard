@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 
+/** Shown for any URL that matches no route. */
 export function NotFoundPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50">

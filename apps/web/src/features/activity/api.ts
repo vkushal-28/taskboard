@@ -1,3 +1,6 @@
+/**
+ * Activity feed queries: recent activity across boards, and a card's history (paged).
+ */
 import { activityPageSchema, recentActivityResponseSchema } from '@taskboard/shared';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
@@ -10,6 +13,7 @@ export const activityKeys = {
   card: (cardId: string) => [...activityKeys.cards(), cardId] as const,
 };
 
+/** The newest activity across all of the user's boards. */
 export function useRecentActivity(limit = 10) {
   return useQuery({
     queryKey: activityKeys.recent(limit),

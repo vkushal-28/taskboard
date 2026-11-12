@@ -25,6 +25,7 @@ commentSchema.index({ boardId: 1, cardId: 1, _id: -1 });
 
 export const CommentModel = model<Comment>('Comment', commentSchema);
 
+/** The JSON shape of a comment that the api sends to clients, with the author's name. */
 export function toCommentDto(
   comment: Comment & { _id: Types.ObjectId },
   authorName: string | undefined,

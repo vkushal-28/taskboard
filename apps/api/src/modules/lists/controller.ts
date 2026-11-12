@@ -6,12 +6,14 @@ import { getBoardContext } from '../../middleware/require-board-role.js';
 import type { WithBody } from '../../middleware/validate.js';
 import * as listsService from './service.js';
 
+/** POST /boards/:boardId/lists (member+): adds a list. */
 export const createList: WithBody<CreateListInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const list = await listsService.createList(boardId, getAuthUserId(req), req.body);
   res.status(201).json({ list });
 };
 
+/** PATCH /lists/:listId (member+): renames the list. */
 export const renameList: WithBody<RenameListInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const listId = requireParam(req.params, 'listId');
@@ -19,6 +21,7 @@ export const renameList: WithBody<RenameListInput> = async (req, res) => {
   res.json({ list });
 };
 
+/** PATCH /lists/:listId/move (member+): moves the list between two neighbours. */
 export const moveList: WithBody<MoveListInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const listId = requireParam(req.params, 'listId');
@@ -26,6 +29,7 @@ export const moveList: WithBody<MoveListInput> = async (req, res) => {
   res.json({ list });
 };
 
+/** DELETE /lists/:listId (member+): deletes the list and its cards. */
 export const deleteList: RequestHandler = async (req, res) => {
   const { boardId } = getBoardContext(req);
   await listsService.deleteList(boardId, requireParam(req.params, 'listId'), getAuthUserId(req));

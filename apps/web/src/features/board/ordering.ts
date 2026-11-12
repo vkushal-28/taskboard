@@ -26,12 +26,14 @@ export function byPosition(
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
+/** The board's cards grouped by list, in position order (list id to card ids). */
 export function groupCards(detail: BoardDetail): Columns {
   const columns: Columns = Object.fromEntries(detail.lists.map((list) => [list.id, []]));
   for (const card of [...detail.cards].sort(byPosition)) columns[card.listId]?.push(card.id);
   return columns;
 }
 
+/** The list that holds a card, in a grouping from `groupCards`. */
 export function findListOf(columns: Columns, cardId: string): string | undefined {
   return Object.keys(columns).find((listId) => columns[listId]?.includes(cardId));
 }
@@ -85,6 +87,7 @@ export function planMove(
   };
 }
 
+/** The board with one card's list and position changed, for the optimistic update. */
 export function applyMove(detail: BoardDetail, plan: MovePlan): BoardDetail {
   return {
     ...detail,

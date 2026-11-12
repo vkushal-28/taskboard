@@ -5,6 +5,7 @@ import { routes } from './routes';
 
 const router = createBrowserRouter(routes);
 
+/** The root component: provides the TanStack Query cache and the router. */
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>

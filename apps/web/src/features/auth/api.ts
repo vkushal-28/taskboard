@@ -1,3 +1,7 @@
+/**
+ * Auth hooks: who is signed in, and sign in / register / sign out. The current user lives in the
+ * TanStack Query cache under `authKeys.me`; route guards read it.
+ */
 import {
   authUserResponseSchema,
   type LoginInput,
@@ -22,6 +26,10 @@ async function fetchCurrentUser(): Promise<PublicUser | null> {
   }
 }
 
+/**
+ * The signed-in user (`null` when signed out) from GET /auth/me. Route guards and the header read
+ * it.
+ */
 export function useAuth() {
   const query = useQuery({
     queryKey: authKeys.me,
@@ -33,6 +41,7 @@ export function useAuth() {
   return { user: query.data ?? null, isLoading: query.isPending, error: query.error };
 }
 
+/** Signs in, stores the user in the cache and tells other tabs. */
 export function useLogin() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -45,6 +54,7 @@ export function useLogin() {
   });
 }
 
+/** Creates an account and signs in, like `useLogin`. */
 export function useRegister() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -63,6 +73,7 @@ export function useRegister() {
 
 export const SIGN_OUT_FAILED_MESSAGE = 'Could not sign out. Check your connection and try again.';
 
+/** Signs out, clears the cached data and tells other tabs. */
 export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({

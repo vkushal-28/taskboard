@@ -1,15 +1,17 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { DAY_MS } from '@taskboard/shared';
 import { errors, jwtVerify, SignJWT } from 'jose';
 import { env } from '../../config/env.js';
 import { Unauthorized } from '../../lib/errors.js';
+import { sha256Hex } from '../../lib/hash.js';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
-export const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const REFRESH_TOKEN_TTL_MS = 7 * DAY_MS;
 
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 
 /** Who a valid access token belongs to, and which refresh family (session) issued it. */
-export interface AccessClaims {
+interface AccessClaims {
   userId: string;
   sessionId: string;
 }
@@ -27,6 +29,10 @@ export async function signAccessToken(userId: string, sessionId: string): Promis
     .sign(accessSecret);
 }
 
+/**
+ * Checks an access token's signature and expiry and returns who it belongs to. Throws
+ * `Unauthorized` for anything invalid.
+ */
 export async function verifyAccessToken(token: string): Promise<AccessClaims> {
   try {
     const { payload } = await jwtVerify(token, accessSecret, { algorithms: ['HS256'] });
@@ -42,10 +48,12 @@ export async function verifyAccessToken(token: string): Promise<AccessClaims> {
   }
 }
 
+/** 32 random bytes for a new refresh token. Only its hash is stored. */
 export function generateRefreshToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
+/** The form a refresh token is stored and looked up in. */
 export function hashRefreshToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
+  return sha256Hex(token);
 }

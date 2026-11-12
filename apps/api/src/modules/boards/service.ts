@@ -1,3 +1,7 @@
+/**
+ * Boards business logic: list, create, read, update and delete boards. Members and their roles live
+ * inside the board document (ADR 005); the members module changes them.
+ */
 import type {
   BoardDetail,
   BoardSummary,
@@ -9,13 +13,14 @@ import type { Types } from 'mongoose';
 import { NotFound } from '../../lib/errors.js';
 import { positionBetween } from '../../lib/position.js';
 import { ActivityModel } from '../activity/model.js';
+import { recordWrite } from '../activity/record-write.js';
 import { logActivity } from '../activity/service.js';
 import { CardModel, toCardDto } from '../cards/model.js';
 import { CommentModel } from '../comments/model.js';
 import { InviteModel } from '../invites/model.js';
 import { ListModel, toListDto } from '../lists/model.js';
 import { closeBoardRoom, emitToBoard } from '../realtime/emitter.js';
-import { BoardModel, type BoardMember } from './model.js';
+import { BoardModel, toBoardSummary, type BoardMember } from './model.js';
 
 const STARTER_LISTS = ['To Do', 'In Progress', 'Done'];
 
@@ -31,6 +36,7 @@ interface BoardSummaryRow {
   members: BoardMember[];
 }
 
+/** Every board the user belongs to, newest change first, each with the user's own role. */
 export async function listBoardsForUser(userId: string): Promise<BoardSummary[]> {
   // `members.$` returns only this user's member entry, which holds their role.
   const boards = await BoardModel.find(
@@ -46,6 +52,7 @@ export async function listBoardsForUser(userId: string): Promise<BoardSummary[]>
   });
 }
 
+/** Creates a board owned by the user, with three starter lists (To Do, In Progress, Done). */
 export async function createBoard(userId: string, input: CreateBoardInput): Promise<BoardDetail> {
   const board = await BoardModel.create({
     title: input.title,
@@ -75,6 +82,10 @@ interface PopulatedMember {
   role: Role;
 }
 
+/**
+ * Everything the board page needs in one response: the board, its members, its lists and its
+ * visible (not archived) cards.
+ */
 export async function getBoardDetail(boardId: string, myRole: Role): Promise<BoardDetail> {
   const [board, lists, cards] = await Promise.all([
     BoardModel.findById(boardId)
@@ -104,6 +115,7 @@ export async function getBoardDetail(boardId: string, myRole: Role): Promise<Boa
   };
 }
 
+/** Renames or recolours a board, then logs and broadcasts the change. */
 export async function updateBoard(
   boardId: string,
   actorId: string,
@@ -115,20 +127,15 @@ export async function updateBoard(
   }).lean();
   if (!board) throw new NotFound('Board not found');
 
-  await logActivity({
-    boardId,
-    actorId,
-    type: 'board.updated',
-    meta: { fields: Object.keys(input) },
-  });
-  emitToBoard(boardId, 'board:updated', {
-    boardId,
-    actorId,
-    board: { id: boardId, title: board.title, color: board.color },
-  });
+  await recordWrite(
+    { boardId, actorId, type: 'board.updated', meta: { fields: Object.keys(input) } },
+    'board:updated',
+    { boardId, actorId, board: { id: boardId, title: board.title, color: board.color } },
+  );
   return toBoardSummary(board, myRole);
 }
 
+/** Deletes a board and everything in it, and tells everyone viewing it. */
 export async function deleteBoard(boardId: string, actorId: string): Promise<void> {
   // Board first (ADR 006): once it is gone the access check fails, so any children a crash
   // leaves behind cannot be reached.
@@ -144,17 +151,4 @@ export async function deleteBoard(boardId: string, actorId: string): Promise<voi
     CommentModel.deleteMany({ boardId }),
     InviteModel.deleteMany({ boardId }),
   ]);
-}
-
-function toBoardSummary(
-  board: Pick<BoardSummaryRow, '_id' | 'title' | 'color' | 'updatedAt'>,
-  role: Role,
-): BoardSummary {
-  return {
-    id: board._id.toString(),
-    title: board.title,
-    color: board.color,
-    role,
-    updatedAt: board.updatedAt.toISOString(),
-  };
 }

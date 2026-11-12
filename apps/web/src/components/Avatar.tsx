@@ -20,6 +20,10 @@ interface AvatarProps {
   size?: 'sm' | 'md';
 }
 
+/**
+ * A round badge with a person's initials. The colour comes from their id, so it stays the same
+ * everywhere.
+ */
 export function Avatar({ id, name, size = 'md' }: AvatarProps) {
   const dimensions = size === 'sm' ? 'h-6 w-6 text-[10px]' : 'h-8 w-8 text-xs';
   return (

@@ -1,3 +1,8 @@
+/**
+ * The Express app. A request flows: security middleware -> router -> requireAuth ->
+ * requireBoardRole (board routes) -> validateBody -> controller -> service -> Mongoose model.
+ * Errors thrown anywhere end in errorHandler. See CLAUDE.md for the layering rules.
+ */
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
@@ -22,6 +27,11 @@ interface AppOptions {
   commit?: string | null;
 }
 
+/**
+ * Builds the Express app: security middleware (Helmet, CORS, Origin check), every feature router,
+ * then the 404 and error handlers. Each call returns a fresh app with fresh rate-limit counters, so
+ * every test gets its own.
+ */
 export function createApp({
   trustProxy = env.TRUST_PROXY,
   commit = env.RENDER_GIT_COMMIT ?? null,

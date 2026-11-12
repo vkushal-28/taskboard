@@ -25,6 +25,10 @@ import { byPosition, dropOrder, findListOf, groupCards, planMove, type Columns }
 // Below this distance a press is a click, not a drag (Phase 5 opens the card on click).
 const DRAG_ACTIVATION_PX = 5;
 
+/**
+ * The scrolling row of lists with drag and drop. While a card is dragged it works on a local copy;
+ * on drop it calls the move endpoint, which updates the cache optimistically (ADR 009).
+ */
 export function BoardCanvas({ detail }: { detail: BoardDetail }) {
   const boardId = detail.board.id;
   const canEdit = hasRole(detail.board.myRole, 'member');

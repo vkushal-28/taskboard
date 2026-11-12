@@ -1,14 +1,20 @@
+/**
+ * Invites business logic: owners invite people by email with a one-time link. Only the SHA-256 of
+ * the link's token is stored, and a link only works for the email it was sent to (ADR 015).
+ */
 import {
+  DAY_MS,
   INVITE_TTL_DAYS,
   type CreateInviteInput,
   type InviteDto,
   type InvitePreview,
   type Role,
 } from '@taskboard/shared';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import type { Types } from 'mongoose';
 import { env } from '../../config/env.js';
 import { Conflict, Forbidden, Gone, NotFound } from '../../lib/errors.js';
+import { sha256Hex } from '../../lib/hash.js';
 import { sendEmail } from '../../lib/mailer.js';
 import { logActivity } from '../activity/service.js';
 import { BoardModel } from '../boards/model.js';
@@ -16,7 +22,7 @@ import { addMember, announce } from '../members/service.js';
 import { UserModel } from '../users/model.js';
 import { InviteModel, PENDING, toInviteDto, type Invite } from './model.js';
 
-const TTL_MS = INVITE_TTL_DAYS * 24 * 60 * 60 * 1000;
+const TTL_MS = INVITE_TTL_DAYS * DAY_MS;
 
 interface IssuedInvite {
   invite: InviteDto;
@@ -27,17 +33,14 @@ interface IssuedInvite {
 /** A fresh token for the link, and the hash that is stored instead of it. */
 function issueToken(): { token: string; tokenHash: string } {
   const token = randomBytes(32).toString('base64url');
-  return { token, tokenHash: hashToken(token) };
-}
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
+  return { token, tokenHash: sha256Hex(token) };
 }
 
 function inviteLink(token: string): string {
   return new URL(`/invite/${token}`, env.CLIENT_URL).toString();
 }
 
+/** The board's pending invites, newest first, with who sent each one. */
 export async function listInvites(boardId: string): Promise<InviteDto[]> {
   const invites = await InviteModel.find({ boardId, ...PENDING })
     .sort({ _id: -1 })
@@ -50,6 +53,10 @@ export async function listInvites(boardId: string): Promise<InviteDto[]> {
   return invites.map((invite) => toInviteDto(invite, inviterOf(invite, names)));
 }
 
+/**
+ * Invites an email address to the board: stores a hashed one-time token valid for 7 days, emails
+ * the link when email is set up, and returns the link so the owner can copy it.
+ */
 export async function createInvite(
   boardId: string,
   actorId: string,
@@ -122,8 +129,12 @@ export async function revokeInvite(
   await logActivity({ boardId, actorId, type: 'member.invite_revoked', meta: { inviteId } });
 }
 
+/**
+ * What the accept page shows (board, inviter, role) before the user accepts. Fails with a clear
+ * code if the link is invalid, used, revoked, expired or meant for someone else.
+ */
 export async function previewInvite(token: string, userId: string): Promise<InvitePreview> {
-  const invite = await InviteModel.findOne({ tokenHash: hashToken(token) }).lean();
+  const invite = await InviteModel.findOne({ tokenHash: sha256Hex(token) }).lean();
   const email = await emailOf(userId);
   assertUsable(invite, email);
   const [board, inviter] = await Promise.all([
@@ -139,11 +150,12 @@ export async function previewInvite(token: string, userId: string): Promise<Invi
   };
 }
 
+/** Uses up the invite and adds the signed-in user to the board with the invited role. */
 export async function acceptInvite(
   token: string,
   userId: string,
 ): Promise<{ boardId: string; role: Role }> {
-  const tokenHash = hashToken(token);
+  const tokenHash = sha256Hex(token);
   const email = await emailOf(userId);
   // One atomic claim: of two requests with the same token, only one gets the invite.
   const claimed = await InviteModel.findOneAndUpdate(

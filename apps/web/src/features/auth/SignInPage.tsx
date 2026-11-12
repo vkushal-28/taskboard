@@ -12,6 +12,7 @@ import { Divider, GitHubButton, SubmitButton } from './form-parts';
 // Created by the Phase 7 seed script. Keep the two in sync.
 export const DEMO_CREDENTIALS: LoginInput = { email: 'priya@acme.dev', password: 'demo1234!' };
 
+/** The sign-in form, with a button that fills in the demo account. */
 export function SignInPage() {
   const login = useLogin();
   // Carries "where to go after signing in" (e.g. an invite link) over to the register page.

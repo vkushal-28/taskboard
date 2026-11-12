@@ -26,6 +26,10 @@ function baseCookieOptions(): CookieOptions {
 
 const REFRESH_COOKIE_PATH = refreshCookiePath(env.API_PUBLIC_PATH);
 
+/**
+ * Sets the httpOnly login cookies: the short-lived access token for every path, and the refresh
+ * token only for the refresh and logout routes.
+ */
 export function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
   const base = baseCookieOptions();
   res.cookie(ACCESS_COOKIE, accessToken, {
@@ -40,6 +44,7 @@ export function setAuthCookies(res: Response, accessToken: string, refreshToken:
   });
 }
 
+/** Removes both login cookies, on logout or when a refresh fails. */
 export function clearAuthCookies(res: Response): void {
   const base = baseCookieOptions();
   res.clearCookie(ACCESS_COOKIE, { ...base, path: '/' });

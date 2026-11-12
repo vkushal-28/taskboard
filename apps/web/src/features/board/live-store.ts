@@ -21,6 +21,7 @@ export function resetLive(boardId: string | null): void {
   useLiveStore.setState({ ...EMPTY, boardId });
 }
 
+/** Applies a `presence:update`: who is online now. People who left stop showing as dragging. */
 export function applyPresence(state: LiveState, update: PresenceUpdate): LiveState {
   if (update.boardId !== state.boardId) return state;
   const online = new Set(update.userIds);
@@ -31,6 +32,7 @@ export function applyPresence(state: LiveState, update: PresenceUpdate): LiveSta
   return { ...state, onlineUserIds: update.userIds, draggingByCard };
 }
 
+/** Applies a `card:dragging` cue: which card someone is moving, or that they stopped. */
 export function applyDragging(state: LiveState, cue: CardDragging): LiveState {
   if (cue.boardId !== state.boardId) return state;
   // One card per user: a new drag replaces their previous one, and `null` ends it.

@@ -6,6 +6,10 @@ interface RedirectState {
   from?: string;
 }
 
+/**
+ * Wraps every page that needs a signed-in user. Signed-out visitors go to /login, which sends them
+ * back here afterwards.
+ */
 export function ProtectedRoute() {
   const { user, isLoading } = useAuth();
   const location = useLocation();

@@ -1,3 +1,7 @@
+/**
+ * Comments business logic. Comments are paged newest first by `_id` (ADR 014), and each new one
+ * also bumps the card's `commentCount`.
+ */
 import type { CardDto, CommentDto, CommentPage, CursorQuery } from '@taskboard/shared';
 import { NotFound } from '../../lib/errors.js';
 import { idsBefore, toPage } from '../../lib/pagination.js';
@@ -7,6 +11,7 @@ import { emitToBoard } from '../realtime/emitter.js';
 import { UserModel } from '../users/model.js';
 import { CommentModel, toCommentDto } from './model.js';
 
+/** One page of a card's comments, newest first, with a cursor for the next page. */
 export async function listComments(
   boardId: string,
   cardId: string,
@@ -27,6 +32,7 @@ export async function listComments(
   };
 }
 
+/** Saves a comment, bumps the card's comment count, then logs and broadcasts both. */
 export async function addComment(
   boardId: string,
   cardId: string,

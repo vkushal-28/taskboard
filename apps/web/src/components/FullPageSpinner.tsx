@@ -1,3 +1,4 @@
+/** Shown while the app checks whether the user is signed in. */
 export function FullPageSpinner() {
   return (
     <div className="flex min-h-screen items-center justify-center" role="status">

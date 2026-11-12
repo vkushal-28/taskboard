@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { nextCursorSchema } from './pagination.js';
 
-export const activityTypeSchema = z.enum([
+const activityTypeSchema = z.enum([
   'board.created',
   'board.updated',
   'list.created',
@@ -37,7 +37,7 @@ export const cardFieldSchema = z.enum([
 
 export type CardField = z.infer<typeof cardFieldSchema>;
 
-export const RECENT_ACTIVITY_MAX = 50;
+const RECENT_ACTIVITY_MAX = 50;
 
 export const recentActivityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(RECENT_ACTIVITY_MAX).default(10),
@@ -46,7 +46,7 @@ export const recentActivityQuerySchema = z.object({
 // Display-ready: the server resolves names and titles, so the client never joins ids itself.
 // `card` and `list` fall back to the title saved at delete time, and are null when neither the
 // document nor a saved title exists.
-export const activityItemSchema = z.object({
+const activityItemSchema = z.object({
   id: z.string(),
   type: activityTypeSchema,
   createdAt: z.iso.datetime(),
@@ -66,6 +66,5 @@ export const activityPageSchema = z.object({
   nextCursor: nextCursorSchema,
 });
 
-export type RecentActivityQuery = z.infer<typeof recentActivityQuerySchema>;
 export type ActivityItem = z.infer<typeof activityItemSchema>;
 export type ActivityPage = z.infer<typeof activityPageSchema>;

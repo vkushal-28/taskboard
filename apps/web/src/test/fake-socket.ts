@@ -3,7 +3,7 @@ import type { RealtimeSocket } from '../lib/socket';
 type Listener = (payload: unknown) => void;
 
 /** Stands in for the Socket.IO client in every test (see setup.ts). jsdom never opens a socket. */
-export class FakeSocket implements RealtimeSocket {
+class FakeSocket implements RealtimeSocket {
   connected = false;
   /** What the "server" answers to every emitWithAck. */
   ack: unknown = { ok: true, role: 'owner' };

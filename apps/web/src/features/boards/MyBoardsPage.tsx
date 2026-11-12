@@ -9,6 +9,10 @@ import { useBoards } from './api';
 import { BoardTile, BoardTileSkeleton, NewBoardTile } from './BoardTile';
 import { CreateBoardDialog } from './CreateBoardDialog';
 
+/**
+ * The home page: a greeting, your boards, boards shared with you, and recent activity. The search
+ * box filters by title.
+ */
 export function MyBoardsPage() {
   const { user } = useAuth();
   const boards = useBoards();

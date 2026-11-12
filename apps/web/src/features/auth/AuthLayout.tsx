@@ -13,6 +13,10 @@ const HIGHLIGHTS = [
   'Checklists, due dates, comments and activity',
 ];
 
+/**
+ * The two-column layout of the sign-in and register pages: brand panel on the left, form on the
+ * right.
+ */
 export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">

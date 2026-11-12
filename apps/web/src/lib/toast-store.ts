@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 
-export type ToastTone = 'error' | 'info';
+type ToastTone = 'error' | 'info';
 
-export interface Toast {
+interface Toast {
   id: number;
   message: string;
   tone: ToastTone;

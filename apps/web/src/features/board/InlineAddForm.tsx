@@ -41,27 +41,26 @@ function ExpandedForm({
   testId,
   onClose,
 }: InlineAddFormProps & { onClose: () => void }) {
-  const [serverError, setServerError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
+    setError,
     reset,
     setFocus,
     formState: { errors, isSubmitting },
   } = useForm({ resolver: zodResolver(schema), defaultValues: { title: '' } });
 
   const submit = handleSubmit(async ({ title }) => {
-    setServerError(null);
     try {
       await onAdd(title);
       reset();
       setFocus('title');
     } catch (error) {
-      setServerError(describeError(error));
+      setError('root.server', { message: describeError(error) });
     }
   });
 
-  const error = errors.title?.message ?? serverError;
+  const error = errors.title?.message ?? errors.root?.server?.message;
 
   return (
     <form

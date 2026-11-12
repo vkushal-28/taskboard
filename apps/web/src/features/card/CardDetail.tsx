@@ -23,6 +23,10 @@ interface CardDetailProps {
   setLeaving: (leaving: boolean) => void;
 }
 
+/**
+ * The card modal's content: title, list, members, labels, due date, description, checklist,
+ * activity, and the sidebar for members. Viewers see it read-only.
+ */
 export function CardDetail({
   card,
   listTitle,

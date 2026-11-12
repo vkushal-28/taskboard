@@ -36,7 +36,7 @@ import { REFRESH_REUSE_GRACE_MS } from '../auth/service.js';
 import { hashRefreshToken } from '../auth/tokens.js';
 import { BoardModel } from '../boards/model.js';
 import { SOCKET_TICKETS_PER_MINUTE } from './routes.js';
-import { SocketTicketModel } from './ticket-model.js';
+import { SocketTicketModel } from './model.js';
 import { emitToBoard, setRealtimeServer, type RealtimeServer } from './emitter.js';
 import { createRealtimeServer } from './server.js';
 

@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { RoleBadge } from '../../components/RoleBadge';
 import { formatRelative, useNow } from '../../lib/time';
 
+/** A board on the My boards page: colour, title, role and when it last changed. */
 export function BoardTile({ board }: { board: BoardSummary }) {
   const now = useNow();
   return (
@@ -27,6 +28,7 @@ export function BoardTile({ board }: { board: BoardSummary }) {
   );
 }
 
+/** The "+ Create new board" tile that opens the create dialog. */
 export function NewBoardTile({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -39,6 +41,7 @@ export function NewBoardTile({ onClick }: { onClick: () => void }) {
   );
 }
 
+/** A grey placeholder tile while boards load. */
 export function BoardTileSkeleton() {
   return (
     <div className="animate-pulse overflow-hidden rounded-xl border border-slate-200 bg-white">

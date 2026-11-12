@@ -24,6 +24,7 @@ export function formatRelative(iso: string, now: number): string {
   return 'just now';
 }
 
+/** "Good morning", "Good afternoon" or "Good evening" for the given time. */
 export function greetingFor(date: Date): string {
   const hour = date.getHours();
   if (hour < 12) return 'Good morning';

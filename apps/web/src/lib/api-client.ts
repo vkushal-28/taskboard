@@ -3,19 +3,19 @@ import { toApiError } from './api-error';
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
-export interface RequestOptions {
+interface RequestOptions {
   method?: HttpMethod;
   body?: unknown;
   signal?: AbortSignal;
 }
 
-export interface ApiClientOptions {
+interface ApiClientOptions {
   baseUrl: string;
   fetch?: typeof globalThis.fetch;
   onSessionExpired?: () => void;
 }
 
-export interface ApiClient {
+interface ApiClient {
   request<T>(path: string, options: RequestOptions & { schema: z.ZodType<T> }): Promise<T>;
   request(path: string, options?: RequestOptions): Promise<void>;
   /**
@@ -30,6 +30,11 @@ const REFRESH_PATH = '/auth/refresh';
 // A 401 from these means "bad credentials" or "no session", never "access token expired".
 const PATHS_WITHOUT_REFRESH = new Set(['/auth/login', '/auth/register', REFRESH_PATH]);
 
+/**
+ * Builds the client every api call goes through. It sends cookies, checks responses against the
+ * shared Zod schemas, and on a 401 refreshes the session once (shared by all calls in the tab) and
+ * retries.
+ */
 export function createApiClient({
   baseUrl,
   // Looked up per call, not bound at import, so test stubs of globalThis.fetch take effect.

@@ -1,18 +1,21 @@
-export type DueStatus = 'overdue' | 'today' | 'soon' | 'later';
+import { DAY_MS } from '@taskboard/shared';
+
+type DueStatus = 'overdue' | 'today' | 'soon' | 'later';
 
 /** Within this many days a due date counts as "soon" (warning). */
-export const DUE_SOON_DAYS = 3;
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const DUE_SOON_DAYS = 3;
 
 const startOfLocalDay = (time: number) => new Date(time).setHours(0, 0, 0, 0);
 
 /** Whole calendar days from today to the due date: 0 today, 1 tomorrow, -1 yesterday. */
 export function daysUntil(dueIso: string, now: number): number {
   // Rounding absorbs the 23- or 25-hour days around daylight-saving changes.
-  return Math.round((startOfLocalDay(Date.parse(dueIso)) - startOfLocalDay(now)) / MS_PER_DAY);
+  return Math.round((startOfLocalDay(Date.parse(dueIso)) - startOfLocalDay(now)) / DAY_MS);
 }
 
+/**
+ * How urgent a due date is: overdue, today, soon (within 3 days) or later. Picks the badge colour.
+ */
 export function dueStatus(dueIso: string, now: number): DueStatus {
   const days = daysUntil(dueIso, now);
   if (days < 0) return 'overdue';

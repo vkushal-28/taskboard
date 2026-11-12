@@ -1,3 +1,7 @@
+/**
+ * Card modal writes. They aren't optimistic: each one stores the card the server returns in the
+ * cached board, so the board view and the modal always agree.
+ */
 import {
   cardResponseSchema,
   type BoardDetail,
@@ -36,28 +40,33 @@ async function cardRequest(path: string, method: 'POST' | 'PATCH' | 'DELETE', bo
   return card;
 }
 
+/** Saves changes to a card's fields. */
 export function useUpdateCard(boardId: string, cardId: string) {
   return useCardWrite(boardId, (input: UpdateCardInput) =>
     cardRequest(`/cards/${cardId}`, 'PATCH', input),
   );
 }
 
+/** Adds a checklist item. */
 export function useAddChecklistItem(boardId: string, cardId: string) {
   return useCardWrite(boardId, (text: string) =>
     cardRequest(`/cards/${cardId}/checklist`, 'POST', { text }),
   );
 }
 
+/** Edits or ticks one checklist item. */
 export function useUpdateChecklistItem(boardId: string, cardId: string, itemId: string) {
   return useCardWrite(boardId, (change: { text?: string; done?: boolean }) =>
     cardRequest(`/cards/${cardId}/checklist/${itemId}`, 'PATCH', change),
   );
 }
 
+/** Removes one checklist item. */
 export function useDeleteChecklistItem(boardId: string, cardId: string, itemId: string) {
   return useCardWrite(boardId, () => cardRequest(`/cards/${cardId}/checklist/${itemId}`, 'DELETE'));
 }
 
+/** Deletes the card and removes it from the cached board. */
 export function useDeleteCard(boardId: string, cardId: string) {
   const queryClient = useQueryClient();
   return useMutation({

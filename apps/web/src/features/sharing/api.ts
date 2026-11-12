@@ -1,3 +1,7 @@
+/**
+ * Share dialog data: pending invites (owners only) and member changes. Member changes update the
+ * cached board's member list straight away.
+ */
 import {
   inviteListResponseSchema,
   inviteWithLinkResponseSchema,
@@ -15,7 +19,7 @@ import { useAuth } from '../auth/api';
 import { applyMembers } from '../board/live-events';
 import { boardKeys } from '../boards/api';
 
-export const sharingKeys = {
+const sharingKeys = {
   invites: (boardId: string) => ['invites', boardId] as const,
 };
 
@@ -33,6 +37,7 @@ function storeMembers(
 
 const reportError = (error: unknown) => showToast(describeError(error));
 
+/** The board's pending invites (owners only). */
 export function useInvites(boardId: string) {
   return useQuery({
     queryKey: sharingKeys.invites(boardId),
@@ -57,6 +62,7 @@ function useInviteWrite<TInput, TResult>(
   });
 }
 
+/** Creates an invite; the response carries the link to share. */
 export function useCreateInvite(boardId: string) {
   return useInviteWrite(boardId, (input: CreateInviteInput) =>
     api.request(`/boards/${boardId}/invites`, {
@@ -67,6 +73,7 @@ export function useCreateInvite(boardId: string) {
   );
 }
 
+/** Issues a new link for an invite; the old link stops working. */
 export function useResendInvite(boardId: string) {
   return useInviteWrite(boardId, (inviteId: string) =>
     api.request(`/boards/${boardId}/invites/${inviteId}/resend`, {
@@ -76,6 +83,7 @@ export function useResendInvite(boardId: string) {
   );
 }
 
+/** Cancels an invite. */
 export function useRevokeInvite(boardId: string) {
   return useInviteWrite(boardId, (inviteId: string) =>
     api.request(`/boards/${boardId}/invites/${inviteId}`, { method: 'DELETE' }),
@@ -95,6 +103,7 @@ function useMemberWrite<TInput>(
   });
 }
 
+/** Changes a member's role and updates the cached member list. */
 export function useChangeRole(boardId: string) {
   return useMemberWrite(boardId, ({ userId, role }: { userId: string; role: Role }) =>
     api.request(`/boards/${boardId}/members/${userId}`, {
@@ -105,6 +114,7 @@ export function useChangeRole(boardId: string) {
   );
 }
 
+/** Removes a member and updates the cached member list. */
 export function useRemoveMember(boardId: string) {
   return useMemberWrite(boardId, (userId: string) =>
     api.request(`/boards/${boardId}/members/${userId}`, {

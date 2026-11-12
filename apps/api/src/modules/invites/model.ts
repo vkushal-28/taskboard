@@ -41,6 +41,7 @@ export const InviteModel = model<Invite>('Invite', inviteSchema);
 /** Not accepted and not revoked. Expired invites still count: the owner can resend them. */
 export const PENDING = { acceptedAt: null, revokedAt: null } as const;
 
+/** The JSON shape of a pending invite shown in the Share dialog. */
 export function toInviteDto(
   invite: Invite & { _id: Types.ObjectId },
   inviter: { id: string; name: string } | null,

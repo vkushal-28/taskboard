@@ -1,3 +1,8 @@
+/**
+ * Cards business logic: create, edit, move, archive, delete, and the checklist. Every write bumps
+ * the card's `version` (ADR 013), logs an activity row and broadcasts to the board room, in that
+ * order.
+ */
 import {
   CHECKLIST_MAX_ITEMS,
   type AddChecklistItemInput,
@@ -10,13 +15,25 @@ import {
 import { Types } from 'mongoose';
 import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
 import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
+import { recordWrite } from '../activity/record-write.js';
 import { logActivity } from '../activity/service.js';
 import { areBoardMembers } from '../boards/access.js';
 import { CommentModel } from '../comments/model.js';
 import { ListModel } from '../lists/model.js';
 import { emitToBoard } from '../realtime/emitter.js';
-import { CardModel, toCardDto } from './model.js';
+import { CardModel, toCardDto, type Card, type ChecklistItem } from './model.js';
 
+/**
+ * The fields PATCH /cards/:cardId may `$set`, checked against the Card model so a misspelt
+ * or unknown field is a type error. New checklist items have no `_id` yet; Mongoose adds one.
+ */
+type CardFieldsUpdate = Partial<
+  Pick<Card, 'title' | 'description' | 'labels' | 'assignees' | 'dueDate' | 'archived'>
+> & {
+  checklist?: (Omit<ChecklistItem, '_id'> & { _id?: string })[];
+};
+
+/** Adds a card at the bottom of a list. */
 export async function createCard(
   boardId: string,
   listId: string,
@@ -32,18 +49,26 @@ export async function createCard(
     CardModel.create({ boardId, listId, ...input, position }),
   );
 
-  await logActivity({ boardId, actorId, cardId: card.id, type: 'card.created', meta: { listId } });
   const dto = toCardDto(card);
-  emitToBoard(boardId, 'card:created', { boardId, actorId, card: dto });
+  await recordWrite(
+    { boardId, actorId, cardId: card.id, type: 'card.created', meta: { listId } },
+    'card:created',
+    { boardId, actorId, card: dto },
+  );
   return dto;
 }
 
+/** One card, if it is on this board. */
 export async function getCard(boardId: string, cardId: string): Promise<CardDto> {
   const card = await CardModel.findOne({ _id: cardId, boardId }).lean();
   if (!card) throw new NotFound('Card not found');
   return toCardDto(card);
 }
 
+/**
+ * Changes a card's fields (title, description, labels, members, due date, archived) in one atomic
+ * write, then logs and broadcasts it.
+ */
 export async function updateCard(
   boardId: string,
   cardId: string,
@@ -51,12 +76,12 @@ export async function updateCard(
   input: UpdateCardInput,
 ): Promise<CardDto> {
   const { assignees, checklist, dueDate, ...plainFields } = input;
-  const set: Record<string, unknown> = { ...plainFields };
+  const set: CardFieldsUpdate = { ...plainFields };
   if (dueDate !== undefined) set.dueDate = dueDate === null ? null : new Date(dueDate);
   if (assignees !== undefined) {
     const uniqueIds = [...new Set(assignees)];
     if (!(await areBoardMembers(boardId, uniqueIds))) {
-      throw new ValidationError(undefined, 'Assignees must be members of the board');
+      throw ValidationError.because('Assignees must be members of the board');
     }
     set.assignees = uniqueIds.map((userId) => new Types.ObjectId(userId));
   }
@@ -94,6 +119,11 @@ export async function updateCard(
   return dto;
 }
 
+/**
+ * Moves a card to a position between two neighbours, in the same or another list. Only this card's
+ * document changes (fractional indexing). Refuses with 409 when the client's view of the list is
+ * out of date.
+ */
 export async function moveCard(
   boardId: string,
   cardId: string,
@@ -102,14 +132,18 @@ export async function moveCard(
 ): Promise<CardDto> {
   const { listId, beforeId, afterId } = input;
   if (beforeId === cardId || afterId === cardId) {
-    throw new ValidationError(undefined, 'A card cannot be its own neighbour');
+    throw ValidationError.because('A card cannot be its own neighbour');
   }
 
-  const card = await CardModel.findOne({ _id: cardId, boardId }, { listId: 1, archived: 1 }).lean();
+  // Independent reads, so one round trip. A missing card wins over a missing list.
+  const [card, targetList] = await Promise.all([
+    CardModel.findOne({ _id: cardId, boardId }, { listId: 1, archived: 1 }).lean(),
+    ListModel.exists({ _id: listId, boardId }),
+  ]);
   if (!card) throw new NotFound('Card not found');
-  if (card.archived) throw new ValidationError(undefined, 'Restore the card before moving it');
+  if (card.archived) throw ValidationError.because('Restore the card before moving it');
   // Missing or on another board: the client's view is stale, and other boards stay hidden.
-  if (!(await ListModel.exists({ _id: listId, boardId }))) throw new Conflict(STALE_ORDER_MESSAGE);
+  if (!targetList) throw new Conflict(STALE_ORDER_MESSAGE);
 
   const [before, after] = await Promise.all([
     neighbourPosition(listId, beforeId),
@@ -136,42 +170,29 @@ export async function moveCard(
   );
   if (!moved) throw new NotFound('Card not found');
 
-  await logActivity({
-    boardId,
-    actorId,
-    cardId,
-    type: 'card.moved',
-    meta: { fromListId: card.listId.toString(), toListId: listId },
-  });
+  const fromListId = card.listId.toString();
   const dto = toCardDto(moved);
-  emitToBoard(boardId, 'card:moved', {
-    boardId,
-    actorId,
-    card: dto,
-    fromListId: card.listId.toString(),
-  });
+  await recordWrite(
+    { boardId, actorId, cardId, type: 'card.moved', meta: { fromListId, toListId: listId } },
+    'card:moved',
+    { boardId, actorId, card: dto, fromListId },
+  );
   return dto;
 }
 
+/** Deletes a card and its comments. */
 export async function deleteCard(boardId: string, cardId: string, actorId: string): Promise<void> {
   const card = await CardModel.findOneAndDelete({ _id: cardId, boardId }).lean();
   if (!card) throw new NotFound('Card not found');
   // After the card (ADR 006): a crash in between leaves comments nothing can reach.
   await CommentModel.deleteMany({ boardId, cardId });
 
-  await logActivity({
-    boardId,
-    actorId,
-    cardId,
-    type: 'card.deleted',
-    meta: { listId: card.listId.toString(), title: card.title },
-  });
-  emitToBoard(boardId, 'card:deleted', {
-    boardId,
-    actorId,
-    cardId,
-    listId: card.listId.toString(),
-  });
+  const listId = card.listId.toString();
+  await recordWrite(
+    { boardId, actorId, cardId, type: 'card.deleted', meta: { listId, title: card.title } },
+    'card:deleted',
+    { boardId, actorId, cardId, listId },
+  );
 }
 
 /** A neighbour must be a visible card in the target list; anything else means a stale view. */
@@ -192,6 +213,7 @@ async function neighbourPosition(
 // ticking different items at once can't overwrite each other's change (ADR 013). Every
 // write returns the whole card, logs one activity entry and broadcasts card:updated.
 
+/** Adds an item to the end of a card's checklist, up to the limit. */
 export async function addChecklistItem(
   boardId: string,
   cardId: string,
@@ -206,16 +228,14 @@ export async function addChecklistItem(
   ).lean();
   if (!card) {
     if (await CardModel.exists({ _id: cardId, boardId })) {
-      throw new ValidationError(
-        undefined,
-        `A checklist holds at most ${CHECKLIST_MAX_ITEMS} items`,
-      );
+      throw ValidationError.because(`A checklist holds at most ${CHECKLIST_MAX_ITEMS} items`);
     }
     throw new NotFound('Card not found');
   }
   return afterChecklistWrite(boardId, actorId, card);
 }
 
+/** Changes the text or ticks one checklist item. */
 export async function updateChecklistItem(
   boardId: string,
   cardId: string,
@@ -237,6 +257,7 @@ export async function updateChecklistItem(
   return afterChecklistWrite(boardId, actorId, card);
 }
 
+/** Removes one checklist item. */
 export async function deleteChecklistItem(
   boardId: string,
   cardId: string,
@@ -264,14 +285,11 @@ async function afterChecklistWrite(
   card: Parameters<typeof toCardDto>[0],
 ): Promise<CardDto> {
   const cardId = card._id.toString();
-  await logActivity({
-    boardId,
-    actorId,
-    cardId,
-    type: 'card.updated',
-    meta: { fields: ['checklist'] },
-  });
   const dto = toCardDto(card);
-  emitToBoard(boardId, 'card:updated', { boardId, actorId, card: dto });
+  await recordWrite(
+    { boardId, actorId, cardId, type: 'card.updated', meta: { fields: ['checklist'] } },
+    'card:updated',
+    { boardId, actorId, card: dto },
+  );
   return dto;
 }

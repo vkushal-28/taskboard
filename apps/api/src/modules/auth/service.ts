@@ -1,3 +1,8 @@
+/**
+ * Auth business logic: accounts, passwords and sessions. A session is a "family" of refresh tokens:
+ * each refresh replaces the token with a new one, and reusing an old token revokes the family (ADR
+ * 004, ADR 016).
+ */
 import { randomUUID } from 'node:crypto';
 import type { LoginInput, PublicUser, RegisterInput } from '@taskboard/shared';
 import bcrypt from 'bcryptjs';
@@ -19,12 +24,12 @@ export const BCRYPT_COST = 12;
 // treated as that race, not as theft, so the session survives.
 export const REFRESH_REUSE_GRACE_MS = 10_000;
 
-export interface SessionTokens {
+interface SessionTokens {
   accessToken: string;
   refreshToken: string;
 }
 
-export interface AuthResult {
+interface AuthResult {
   user: PublicUser;
   tokens: SessionTokens;
 }
@@ -37,6 +42,7 @@ function getDummyHash(): Promise<string> {
   return dummyHash;
 }
 
+/** Creates an account (password hashed with bcrypt) and signs the new user in. */
 export async function register(input: RegisterInput): Promise<AuthResult> {
   if (await UserModel.exists({ email: input.email })) {
     throw new Conflict('An account with this email already exists');
@@ -55,6 +61,10 @@ export async function register(input: RegisterInput): Promise<AuthResult> {
   }
 }
 
+/**
+ * Checks email and password and starts a new session. Takes the same time whether or not the email
+ * exists, so it can't be used to find accounts.
+ */
 export async function login(input: LoginInput): Promise<AuthResult> {
   const user = await UserModel.findOne({ email: input.email }).select('+passwordHash');
   const passwordMatches = await bcrypt.compare(
@@ -66,6 +76,10 @@ export async function login(input: LoginInput): Promise<AuthResult> {
   return { user: toPublicUser(user), tokens: await issueSession(user.id) };
 }
 
+/**
+ * Swaps a refresh token for a new pair of tokens (rotation). A token used twice outside the short
+ * grace window counts as stolen, and the whole session is revoked.
+ */
 export async function refresh(refreshToken: string | undefined): Promise<SessionTokens> {
   if (!refreshToken) throw new Unauthorized('Refresh token missing');
 
@@ -98,6 +112,7 @@ export async function refresh(refreshToken: string | undefined): Promise<Session
   throw new Unauthorized('Invalid refresh token');
 }
 
+/** Ends the session the refresh token belongs to and disconnects its live sockets. */
 export async function logout(refreshToken: string | undefined): Promise<void> {
   if (!refreshToken) return;
   const existing = await RefreshTokenModel.findOne({ tokenHash: hashRefreshToken(refreshToken) });
@@ -117,6 +132,7 @@ export async function isSessionActive(familyId: string): Promise<boolean> {
   return active !== null;
 }
 
+/** The public profile behind GET /auth/me. */
 export async function getCurrentUser(userId: string): Promise<PublicUser> {
   const user = await UserModel.findById(userId);
   if (!user) throw new Unauthorized('User no longer exists');

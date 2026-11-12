@@ -13,3 +13,10 @@ const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, owner: 2 };
 export function hasRole(actual: Role, minRole: Role): boolean {
   return ROLE_RANK[actual] >= ROLE_RANK[minRole];
 }
+
+/** How a role is shown to people. */
+export const ROLE_LABELS: Record<Role, string> = {
+  owner: 'Owner',
+  member: 'Member',
+  viewer: 'Viewer',
+};

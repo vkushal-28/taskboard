@@ -18,6 +18,7 @@ interface ListColumnProps {
   canEdit: boolean;
 }
 
+/** One list: its title, its cards and the "Add a card" form. The whole column is a drop target. */
 export function ListColumn({ boardId, list, cards, members, canEdit }: ListColumnProps) {
   // The whole column is a drop target, so a card can be dropped into an empty list, below the
   // last card or on the header; dropOrder() puts it last.

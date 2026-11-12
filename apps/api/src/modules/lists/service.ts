@@ -1,12 +1,16 @@
+/**
+ * Lists business logic. Lists are ordered by a fractional-index `position` string, so a move
+ * rewrites only the moved list (ADR 007). Every write is logged and broadcast to the board room.
+ */
 import type { CreateListInput, ListDto, MoveListInput, RenameListInput } from '@taskboard/shared';
 import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
 import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
-import { logActivity } from '../activity/service.js';
+import { recordWrite } from '../activity/record-write.js';
 import { CardModel } from '../cards/model.js';
 import { CommentModel } from '../comments/model.js';
-import { emitToBoard } from '../realtime/emitter.js';
 import { ListModel, toListDto } from './model.js';
 
+/** Adds a list at the right end of the board. */
 export async function createList(
   boardId: string,
   actorId: string,
@@ -17,17 +21,16 @@ export async function createList(
     ListModel.create({ boardId, title: input.title, position }),
   );
 
-  await logActivity({
-    boardId,
-    actorId,
-    type: 'list.created',
-    meta: { listId: list.id, title: list.title },
-  });
   const dto = toListDto(list);
-  emitToBoard(boardId, 'list:created', { boardId, actorId, list: dto });
+  await recordWrite(
+    { boardId, actorId, type: 'list.created', meta: { listId: list.id, title: list.title } },
+    'list:created',
+    { boardId, actorId, list: dto },
+  );
   return dto;
 }
 
+/** Renames a list. */
 export async function renameList(
   boardId: string,
   listId: string,
@@ -41,17 +44,19 @@ export async function renameList(
   ).lean();
   if (!list) throw new NotFound('List not found');
 
-  await logActivity({
-    boardId,
-    actorId,
-    type: 'list.renamed',
-    meta: { listId, title: list.title },
-  });
   const dto = toListDto(list);
-  emitToBoard(boardId, 'list:updated', { boardId, actorId, list: dto });
+  await recordWrite(
+    { boardId, actorId, type: 'list.renamed', meta: { listId, title: list.title } },
+    'list:updated',
+    { boardId, actorId, list: dto },
+  );
   return dto;
 }
 
+/**
+ * Moves a list between two neighbours. Only this list's document changes. Refuses with 409 when the
+ * client's order is out of date.
+ */
 export async function moveList(
   boardId: string,
   listId: string,
@@ -59,7 +64,7 @@ export async function moveList(
   input: MoveListInput,
 ): Promise<ListDto> {
   if (input.beforeId === listId || input.afterId === listId) {
-    throw new ValidationError(undefined, 'A list cannot be its own neighbour');
+    throw ValidationError.because('A list cannot be its own neighbour');
   }
 
   const [before, after] = await Promise.all([
@@ -81,12 +86,16 @@ export async function moveList(
   );
   if (!list) throw new NotFound('List not found');
 
-  await logActivity({ boardId, actorId, type: 'list.moved', meta: { listId } });
   const dto = toListDto(list);
-  emitToBoard(boardId, 'list:moved', { boardId, actorId, list: dto });
+  await recordWrite({ boardId, actorId, type: 'list.moved', meta: { listId } }, 'list:moved', {
+    boardId,
+    actorId,
+    list: dto,
+  });
   return dto;
 }
 
+/** Deletes a list together with its cards and their comments. */
 export async function deleteList(boardId: string, listId: string, actorId: string): Promise<void> {
   const list = await ListModel.findOne({ _id: listId, boardId }, { title: 1 }).lean();
   if (!list) throw new NotFound('List not found');
@@ -98,13 +107,11 @@ export async function deleteList(boardId: string, listId: string, actorId: strin
   // Comments last: once their cards are gone, nothing can reach them.
   await CommentModel.deleteMany({ boardId, cardId: { $in: cards.map((card) => card._id) } });
 
-  await logActivity({
-    boardId,
-    actorId,
-    type: 'list.deleted',
-    meta: { listId, title: list.title },
-  });
-  emitToBoard(boardId, 'list:deleted', { boardId, actorId, listId });
+  await recordWrite(
+    { boardId, actorId, type: 'list.deleted', meta: { listId, title: list.title } },
+    'list:deleted',
+    { boardId, actorId, listId },
+  );
 }
 
 /** A neighbour that is missing or on another board means the client's view is stale. */

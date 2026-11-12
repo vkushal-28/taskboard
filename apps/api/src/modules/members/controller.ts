@@ -9,6 +9,7 @@ import * as membersService from './service.js';
 const memberParam = (params: Record<string, string | string[] | undefined>) =>
   requireObjectIdParam(params, 'userId', 'Member not found');
 
+/** PATCH /boards/:boardId/members/:userId (owner): changes a member's role. */
 export const changeRole: WithBody<UpdateMemberInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const members = await membersService.changeRole(
@@ -20,6 +21,7 @@ export const changeRole: WithBody<UpdateMemberInput> = async (req, res) => {
   res.json({ members });
 };
 
+/** DELETE /boards/:boardId/members/:userId (owner): removes a member. */
 export const removeMember: RequestHandler = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const members = await membersService.removeMember(

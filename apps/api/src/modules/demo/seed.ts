@@ -150,7 +150,7 @@ export const DEMO_BOARDS: DemoBoard[] = [
   },
 ];
 
-export interface SeedResult {
+interface SeedResult {
   userIds: Record<DemoUser, string>;
   boards: { title: string; id: string; created: boolean }[];
 }

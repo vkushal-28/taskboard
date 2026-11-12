@@ -13,7 +13,7 @@ import type { Server } from 'socket.io';
 import { logger } from '../../lib/logger.js';
 
 // Plain objects, not Maps: a multi-instance adapter serializes socket.data (ADR 012).
-export interface SocketData {
+interface SocketData {
   userId: string;
   /** The refresh family (session) whose access token opened this socket. */
   sessionId: string;
@@ -38,6 +38,10 @@ interface PlainEmitter {
 // call. Until one is set (tests, scripts) emits are skipped.
 let io: RealtimeServer | null = null;
 
+/**
+ * Called once at startup with the Socket.IO server, so services can broadcast. Until then (tests,
+ * scripts) broadcasts are skipped.
+ */
 export function setRealtimeServer(server: RealtimeServer | null): void {
   io = server;
 }

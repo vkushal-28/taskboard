@@ -1,10 +1,14 @@
+/**
+ * Board membership: change a member's role or remove them. A board always keeps at least one owner.
+ * Changes are pushed to open sockets so the affected person's view updates at once.
+ */
 import type { BoardMemberDto, Role } from '@taskboard/shared';
 import type { Types } from 'mongoose';
 import { Conflict, NotFound } from '../../lib/errors.js';
-import { logActivity } from '../activity/service.js';
+import { recordWrite } from '../activity/record-write.js';
 import { BoardModel } from '../boards/model.js';
 import { CardModel } from '../cards/model.js';
-import { emitToBoard, syncMemberSockets } from '../realtime/emitter.js';
+import { syncMemberSockets } from '../realtime/emitter.js';
 
 const LAST_OWNER_MESSAGE = 'A board needs at least one owner. Make someone else an owner first.';
 
@@ -14,7 +18,7 @@ interface PopulatedMember {
 }
 
 /** The board's members with names. A deleted user populates as null and is left out. */
-export async function listMembers(boardId: string): Promise<BoardMemberDto[]> {
+async function listMembers(boardId: string): Promise<BoardMemberDto[]> {
   const board = await BoardModel.findById(boardId, { members: 1 })
     .populate<{ members: PopulatedMember[] }>('members.userId', 'name')
     .lean();
@@ -33,6 +37,10 @@ function anotherOwnerThan(userId: string) {
   return { members: { $elemMatch: { role: 'owner', userId: { $ne: userId } } } };
 }
 
+/**
+ * Gives a member a new role. A board always keeps at least one owner, so demoting the last owner
+ * fails with 409 `LAST_OWNER`.
+ */
 export async function changeRole(
   boardId: string,
   actorId: string,
@@ -57,6 +65,10 @@ export async function changeRole(
   return announce(boardId, actorId, 'member.role_changed', { userId, role });
 }
 
+/**
+ * Removes someone from the board and from every card they were assigned to. The last owner can't be
+ * removed.
+ */
 export async function removeMember(
   boardId: string,
   actorId: string,
@@ -104,8 +116,11 @@ export async function announce(
   meta: Record<string, unknown>,
 ): Promise<BoardMemberDto[]> {
   const members = await listMembers(boardId);
-  await logActivity({ boardId, actorId, type, meta });
-  emitToBoard(boardId, 'members:updated', { boardId, actorId, members });
+  await recordWrite({ boardId, actorId, type, meta }, 'members:updated', {
+    boardId,
+    actorId,
+    members,
+  });
   return members;
 }
 

@@ -1,7 +1,7 @@
 import { expect, type Browser, type Locator, type Page } from '@playwright/test';
 import { API_URL } from '../playwright.config';
 
-export const PASSWORD = 'e2e-password-123';
+const PASSWORD = 'e2e-password-123';
 
 export interface Person {
   name: string;

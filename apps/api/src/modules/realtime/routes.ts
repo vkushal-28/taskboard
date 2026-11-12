@@ -1,3 +1,4 @@
+import { MINUTE_MS } from '@taskboard/shared';
 import { Router, type RequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { TooManyRequests } from '../../lib/errors.js';
@@ -9,7 +10,7 @@ export const SOCKET_TICKETS_PER_MINUTE = 30;
 
 function ticketLimit(): RequestHandler {
   return rateLimit({
-    windowMs: 60_000,
+    windowMs: MINUTE_MS,
     limit: SOCKET_TICKETS_PER_MINUTE,
     keyGenerator: (req) => getAuthUserId(req),
     standardHeaders: 'draft-8',

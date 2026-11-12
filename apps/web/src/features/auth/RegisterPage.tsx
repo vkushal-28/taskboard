@@ -9,6 +9,10 @@ import { useRegister } from './api';
 import { AuthLayout } from './AuthLayout';
 import { Divider, GitHubButton, SubmitButton } from './form-parts';
 
+/**
+ * The register form. After signing up, the user goes back to where they were heading (for example
+ * an invite link).
+ */
 export function RegisterPage() {
   const registerUser = useRegister();
   // Carries "where to go after signing in" (e.g. an invite link) over to the sign-in page.

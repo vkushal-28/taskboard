@@ -20,6 +20,7 @@ const userSchema = new Schema<User>(
 
 export const UserModel = model<User>('User', userSchema);
 
+/** The fields of a user that are safe to send to the browser (never the password hash). */
 export function toPublicUser(user: HydratedDocument<User>): PublicUser {
   return { id: user.id, name: user.name, email: user.email };
 }

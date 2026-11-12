@@ -2,10 +2,19 @@ import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { AppError, NotFound } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 
+/**
+ * Last route in the app: any request that matched nothing becomes a 404 in the standard error
+ * format.
+ */
 export const notFoundHandler: RequestHandler = (req, _res, next) => {
   next(new NotFound(`Route ${req.method} ${req.path} not found`));
 };
 
+/**
+ * Turns every thrown error into the `{ error: { code, message, details? } }` response. `AppError`s
+ * keep their status and code; anything unexpected is logged and becomes a 500 without leaking
+ * internals.
+ */
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof AppError) {
     res.status(err.status).json({

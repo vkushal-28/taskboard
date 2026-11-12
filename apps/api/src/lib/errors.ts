@@ -14,6 +14,11 @@ export class ValidationError extends AppError {
   constructor(details: unknown, message = 'Request validation failed') {
     super(400, 'VALIDATION_ERROR', message, details);
   }
+
+  /** A rule the request breaks that no schema can express, e.g. a card moving next to itself. */
+  static because(message: string): ValidationError {
+    return new ValidationError(undefined, message);
+  }
 }
 
 export class Unauthorized extends AppError {

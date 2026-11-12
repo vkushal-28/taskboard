@@ -1,3 +1,7 @@
+/**
+ * Activity log: every successful write records a row here (who did what, to which card or list).
+ * The feeds on My boards and in the card modal read it, with names resolved.
+ */
 import {
   cardFieldSchema,
   type ActivityItem,
