@@ -70,7 +70,7 @@ const envSchema = z
     COOKIE_SECURE: env.COOKIE_SECURE ?? env.NODE_ENV === 'production',
   }));
 
-export type Env = z.infer<typeof envSchema>;
+type Env = z.infer<typeof envSchema>;
 
 export function parseEnv(raw: NodeJS.ProcessEnv): Env {
   return envSchema.parse(raw);

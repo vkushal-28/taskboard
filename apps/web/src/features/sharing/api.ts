@@ -15,7 +15,7 @@ import { useAuth } from '../auth/api';
 import { applyMembers } from '../board/live-events';
 import { boardKeys } from '../boards/api';
 
-export const sharingKeys = {
+const sharingKeys = {
   invites: (boardId: string) => ['invites', boardId] as const,
 };
 

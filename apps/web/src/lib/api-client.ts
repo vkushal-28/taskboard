@@ -3,19 +3,19 @@ import { toApiError } from './api-error';
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
-export interface RequestOptions {
+interface RequestOptions {
   method?: HttpMethod;
   body?: unknown;
   signal?: AbortSignal;
 }
 
-export interface ApiClientOptions {
+interface ApiClientOptions {
   baseUrl: string;
   fetch?: typeof globalThis.fetch;
   onSessionExpired?: () => void;
 }
 
-export interface ApiClient {
+interface ApiClient {
   request<T>(path: string, options: RequestOptions & { schema: z.ZodType<T> }): Promise<T>;
   request(path: string, options?: RequestOptions): Promise<void>;
   /**

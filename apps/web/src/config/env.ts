@@ -27,7 +27,7 @@ const envSchema = z
     return { apiUrl: VITE_API_URL, socketUrl };
   });
 
-export type WebEnv = z.output<typeof envSchema>;
+type WebEnv = z.output<typeof envSchema>;
 
 export function parseWebEnv(raw: Record<string, unknown>): WebEnv {
   const parsed = envSchema.safeParse(raw);

@@ -11,7 +11,7 @@ export const REFRESH_TOKEN_TTL_MS = 7 * DAY_MS;
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 
 /** Who a valid access token belongs to, and which refresh family (session) issued it. */
-export interface AccessClaims {
+interface AccessClaims {
   userId: string;
   sessionId: string;
 }

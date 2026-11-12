@@ -1,6 +1,6 @@
 import { model, Schema, type Types } from 'mongoose';
 
-export interface RefreshToken {
+interface RefreshToken {
   userId: Types.ObjectId;
   familyId: string;
   tokenHash: string;

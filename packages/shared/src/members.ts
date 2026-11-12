@@ -6,14 +6,14 @@ import { roleSchema } from './roles.js';
 export const INVITE_TTL_DAYS = 7;
 
 /** Owners are made with a role change after joining, never straight from an invite. */
-export const inviteRoleSchema = roleSchema.exclude(['owner']);
+const inviteRoleSchema = roleSchema.exclude(['owner']);
 
 export const createInviteSchema = z.object({
   email: emailSchema,
   role: inviteRoleSchema.default('member'),
 });
 
-export const inviteDtoSchema = z.object({
+const inviteDtoSchema = z.object({
   id: z.string(),
   email: z.string(),
   role: inviteRoleSchema,
@@ -50,14 +50,8 @@ export const updateMemberSchema = z.object({ role: roleSchema });
 export const membersResponseSchema = z.object({ members: z.array(boardMemberDtoSchema) });
 
 /** Error codes the accept page turns into messages. */
-export const INVITE_ERROR_CODES = [
-  'INVITE_NOT_FOUND',
-  'INVITE_EXPIRED',
-  'INVITE_REVOKED',
-  'INVITE_USED',
-  'INVITE_WRONG_ACCOUNT',
-] as const;
-export type InviteErrorCode = (typeof INVITE_ERROR_CODES)[number];
+export type InviteErrorCode =
+  'INVITE_NOT_FOUND' | 'INVITE_EXPIRED' | 'INVITE_REVOKED' | 'INVITE_USED' | 'INVITE_WRONG_ACCOUNT';
 
 export type CreateInviteInput = z.infer<typeof createInviteSchema>;
 export type InviteDto = z.infer<typeof inviteDtoSchema>;

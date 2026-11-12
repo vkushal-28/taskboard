@@ -14,7 +14,7 @@ interface PopulatedMember {
 }
 
 /** The board's members with names. A deleted user populates as null and is left out. */
-export async function listMembers(boardId: string): Promise<BoardMemberDto[]> {
+async function listMembers(boardId: string): Promise<BoardMemberDto[]> {
   const board = await BoardModel.findById(boardId, { members: 1 })
     .populate<{ members: PopulatedMember[] }>('members.userId', 'name')
     .lean();

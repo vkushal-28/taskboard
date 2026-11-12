@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { objectIdSchema } from './boards.js';
 
-export const PAGE_MAX = 50;
+const PAGE_MAX = 50;
 
 /**
  * Newest first. `cursor` is the id of the last item of the previous page; the next page holds

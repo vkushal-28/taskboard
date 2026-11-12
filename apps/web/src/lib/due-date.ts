@@ -1,9 +1,9 @@
 import { DAY_MS } from '@taskboard/shared';
 
-export type DueStatus = 'overdue' | 'today' | 'soon' | 'later';
+type DueStatus = 'overdue' | 'today' | 'soon' | 'later';
 
 /** Within this many days a due date counts as "soon" (warning). */
-export const DUE_SOON_DAYS = 3;
+const DUE_SOON_DAYS = 3;
 
 const startOfLocalDay = (time: number) => new Date(time).setHours(0, 0, 0, 0);
 

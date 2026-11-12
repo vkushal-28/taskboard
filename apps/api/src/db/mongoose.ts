@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { logger } from '../lib/logger.js';
 
-export type DbStatus = 'connected' | 'disconnected';
+type DbStatus = 'connected' | 'disconnected';
 
 export async function connectDb(uri: string): Promise<void> {
   mongoose.connection.on('disconnected', () => logger.warn('mongodb disconnected'));

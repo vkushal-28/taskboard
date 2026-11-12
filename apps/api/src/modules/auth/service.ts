@@ -19,12 +19,12 @@ export const BCRYPT_COST = 12;
 // treated as that race, not as theft, so the session survives.
 export const REFRESH_REUSE_GRACE_MS = 10_000;
 
-export interface SessionTokens {
+interface SessionTokens {
   accessToken: string;
   refreshToken: string;
 }
 
-export interface AuthResult {
+interface AuthResult {
   user: PublicUser;
   tokens: SessionTokens;
 }

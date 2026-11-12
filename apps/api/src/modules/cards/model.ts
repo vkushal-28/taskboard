@@ -1,7 +1,7 @@
 import type { CardDto } from '@taskboard/shared';
 import { model, Schema, type Types } from 'mongoose';
 
-export interface CardLabel {
+interface CardLabel {
   name: string;
   color: string;
 }

@@ -3,7 +3,7 @@ import { sha256Hex } from '../../lib/hash.js';
 import { SocketTicketModel } from './ticket-model.js';
 
 /** Long enough to open a socket right after asking, short enough to be useless if leaked. */
-export const SOCKET_TICKET_TTL_MS = 30_000;
+const SOCKET_TICKET_TTL_MS = 30_000;
 
 export interface TicketClaims {
   userId: string;
