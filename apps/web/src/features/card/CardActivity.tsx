@@ -136,26 +136,25 @@ function CommentItem({ comment, now }: { comment: CommentDto; now: number }) {
 
 function CommentForm({ card }: { card: CardDto }) {
   const addComment = useAddComment(card.boardId, card.id);
-  const [serverError, setServerError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
+    setError,
     reset,
     formState: { errors, isSubmitting },
   } = useForm({ resolver: zodResolver(createCommentSchema), defaultValues: { body: '' } });
 
   const submit = handleSubmit(async ({ body }) => {
-    setServerError(null);
     try {
       await addComment.mutateAsync(body);
       reset();
     } catch (error) {
       // The draft stays in the box, so nothing typed is lost.
-      setServerError(describeError(error));
+      setError('root.server', { message: describeError(error) });
     }
   });
 
-  const error = errors.body?.message ?? serverError;
+  const error = errors.body?.message ?? errors.root?.server?.message;
 
   return (
     <form noValidate onSubmit={(event) => void submit(event)} className="space-y-2">

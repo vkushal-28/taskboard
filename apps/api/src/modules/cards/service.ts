@@ -15,7 +15,17 @@ import { areBoardMembers } from '../boards/access.js';
 import { CommentModel } from '../comments/model.js';
 import { ListModel } from '../lists/model.js';
 import { emitToBoard } from '../realtime/emitter.js';
-import { CardModel, toCardDto } from './model.js';
+import { CardModel, toCardDto, type Card, type ChecklistItem } from './model.js';
+
+/**
+ * The fields PATCH /cards/:cardId may `$set`, checked against the Card model so a misspelt
+ * or unknown field is a type error. New checklist items have no `_id` yet; Mongoose adds one.
+ */
+type CardFieldsUpdate = Partial<
+  Pick<Card, 'title' | 'description' | 'labels' | 'assignees' | 'dueDate' | 'archived'>
+> & {
+  checklist?: (Omit<ChecklistItem, '_id'> & { _id?: string })[];
+};
 
 export async function createCard(
   boardId: string,
@@ -51,7 +61,7 @@ export async function updateCard(
   input: UpdateCardInput,
 ): Promise<CardDto> {
   const { assignees, checklist, dueDate, ...plainFields } = input;
-  const set: Record<string, unknown> = { ...plainFields };
+  const set: CardFieldsUpdate = { ...plainFields };
   if (dueDate !== undefined) set.dueDate = dueDate === null ? null : new Date(dueDate);
   if (assignees !== undefined) {
     const uniqueIds = [...new Set(assignees)];

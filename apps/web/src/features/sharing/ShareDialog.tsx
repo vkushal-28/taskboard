@@ -76,10 +76,10 @@ function InviteForm({
   onIssued: (issued: IssuedLink) => void;
 }) {
   const createInvite = useCreateInvite(boardId);
-  const [serverError, setServerError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
+    setError,
     reset,
     formState: { errors, isSubmitting },
   } = useForm({
@@ -88,17 +88,16 @@ function InviteForm({
   });
 
   const submit = handleSubmit(async (input) => {
-    setServerError(null);
     try {
       const { invite, link, emailed } = await createInvite.mutateAsync(input);
       onIssued({ inviteId: invite.id, email: invite.email, link, emailed });
       reset();
     } catch (error) {
-      setServerError(describeError(error));
+      setError('root.server', { message: describeError(error) });
     }
   });
 
-  const error = errors.email?.message ?? serverError;
+  const error = errors.email?.message ?? errors.root?.server?.message;
 
   return (
     <form noValidate onSubmit={(event) => void submit(event)} className="space-y-2">
