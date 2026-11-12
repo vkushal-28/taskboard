@@ -125,7 +125,7 @@ Claude reads this file at the start of every session. Keep the top block current
     - `/invite/:token` is a protected route. Sign-in and register links pass `location.state` along, so a new user returns to the invite after registering. Accept navigates with `replace`.
     - The RBAC fixture creates one invite (`inviteId`). `/invites/:token` routes aren't in the permissions table (not board-scoped); they're described in prose under it.
     - Playwright gotcha: `getByRole(..., { name })` matches substrings ("Comment" also hits "Comments (1)"; heading "Website Redesign" also hits "Join Website Redesign"). Use `exact: true` or `waitForURL`.
-    - Dev data: a pending invite for the user's own email (`kushal.vala.dev@gmail.com`, member, expires 2026-11-11) is on the demo board; its link can't be recovered (hash only), so use Resend in the Share dialog to get a new one.
+    - Dev data: a pending invite for the user's own email (member, expired 2026-11-11) is on the demo board; its link can't be recovered (hash only), so use Resend in the Share dialog to get a new one.
     - Invite create and resend share a per-user limit (`INVITE_EMAILS_PER_WINDOW` = 20 per 15 min, `inviteEmailLimit()` in `invites/routes.ts`, keyed by user id, after the owner check). Inviting an email again revokes its expired invites. Revokes log `member.invite_revoked`.
     - **Exception to "log and broadcast every write":** invite create, resend and revoke are logged (create and revoke) but never broadcast, because the board room includes viewers and the pending list holds emails. The owner's other tabs see changes on the next fetch of the dialog.
     - An invite stays valid after the owner who sent it is demoted or removed (ADR 015).
