@@ -1,4 +1,4 @@
-import { ROLES, type Role } from '@taskboard/shared';
+import { ROLES, type BoardSummary, type Role } from '@taskboard/shared';
 import { model, Schema, type Types } from 'mongoose';
 
 export interface BoardMember {
@@ -37,3 +37,17 @@ const boardSchema = new Schema<Board>(
 boardSchema.index({ 'members.userId': 1 });
 
 export const BoardModel = model<Board>('Board', boardSchema);
+
+/** The JSON shape of a board on the My boards page, with the viewer's own role on it. */
+export function toBoardSummary(
+  board: Pick<Board, 'title' | 'color' | 'updatedAt'> & { _id: Types.ObjectId },
+  role: Role,
+): BoardSummary {
+  return {
+    id: board._id.toString(),
+    title: board.title,
+    color: board.color,
+    role,
+    updatedAt: board.updatedAt.toISOString(),
+  };
+}

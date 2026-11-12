@@ -20,7 +20,7 @@ import { CommentModel } from '../comments/model.js';
 import { InviteModel } from '../invites/model.js';
 import { ListModel, toListDto } from '../lists/model.js';
 import { closeBoardRoom, emitToBoard } from '../realtime/emitter.js';
-import { BoardModel, type BoardMember } from './model.js';
+import { BoardModel, toBoardSummary, type BoardMember } from './model.js';
 
 const STARTER_LISTS = ['To Do', 'In Progress', 'Done'];
 
@@ -151,17 +151,4 @@ export async function deleteBoard(boardId: string, actorId: string): Promise<voi
     CommentModel.deleteMany({ boardId }),
     InviteModel.deleteMany({ boardId }),
   ]);
-}
-
-function toBoardSummary(
-  board: Pick<BoardSummaryRow, '_id' | 'title' | 'color' | 'updatedAt'>,
-  role: Role,
-): BoardSummary {
-  return {
-    id: board._id.toString(),
-    title: board.title,
-    color: board.color,
-    role,
-    updatedAt: board.updatedAt.toISOString(),
-  };
 }

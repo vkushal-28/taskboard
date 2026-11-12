@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { sha256Hex } from '../../lib/hash.js';
-import { SocketTicketModel } from './ticket-model.js';
+import { SocketTicketModel } from './model.js';
 
 /** Long enough to open a socket right after asking, short enough to be useless if leaked. */
 const SOCKET_TICKET_TTL_MS = 30_000;

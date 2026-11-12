@@ -22,7 +22,7 @@ import {
   sessionRoom,
   type RealtimeServer,
 } from './emitter.js';
-import { redeemTicket, type TicketClaims } from './ticket-service.js';
+import { redeemTicket, type TicketClaims } from './service.js';
 import { createMessageLimiter, SOCKET_MESSAGE_LIMIT, type MessageLimit } from './rate-limit.js';
 
 type RealtimeSocket =
