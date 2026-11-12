@@ -1,4 +1,4 @@
-import { loginSchema, registerSchema } from '@taskboard/shared';
+import { loginSchema, MINUTE_MS, registerSchema } from '@taskboard/shared';
 import { Router, type RequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { env } from '../../config/env.js';
@@ -7,11 +7,11 @@ import { requireAuth } from '../../middleware/require-auth.js';
 import { validateBody } from '../../middleware/validate.js';
 import * as controller from './controller.js';
 
-const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+const RATE_LIMIT_WINDOW_MS = 15 * MINUTE_MS;
 
 function limit(limitPerWindow: number): RequestHandler {
   return rateLimit({
-    windowMs: FIFTEEN_MINUTES_MS,
+    windowMs: RATE_LIMIT_WINDOW_MS,
     limit: limitPerWindow,
     standardHeaders: 'draft-8',
     legacyHeaders: false,

@@ -74,7 +74,7 @@ Claude reads this file at the start of every session. Keep the top block current
   - `logActivity` runs after each successful write and never throws. `emitToBoard(boardId, event, payload)` (`modules/realtime/emitter.ts`) runs right after it, and never throws either. A new write must do both, and needs a row in the `writes` table in `realtime.test.ts` and a schema in `boardEventSchemas` (`packages/shared/src/realtime.ts`).
   - Non-members get 404, members below the min role get 403 (ADR 005). Socket joins use the same rule through `findMemberRole`.
   - **Realtime (Phase 4):**
-    - Sockets are read-only. They authenticate from the `tb_access` cookie (the REST cookie-parser runs on the handshake through `io.engine.use`), and `allowRequest` refuses a foreign `Origin` (ADR 010).
+    - Sockets are read-only. They connect to Render directly and log in with a single-use ticket from `POST /realtime/ticket` (SHA-256 stored for 30 s, redeemed with one `findOneAndDelete`), sent in Socket.IO's `auth` (ADR 018, replacing ADR 010's cookie handshake). `allowRequest` still refuses a foreign `Origin`.
     - `server.ts` builds the HTTP server with `createServer(createApp())`, attaches Socket.IO, then calls `listen(server, port)`. `listen()` now takes a `Server`, not the Express app.
     - Presence isn't stored: `broadcastPresence` reads `io.in(room).fetchSockets()` and dedupes by `socket.data.userId` (ADR 012). It runs **before** the join ack, so a client has the list when its join resolves. Tests that count events depend on that order.
     - `socket.data` = `{ userId, boards: {boardId: role}, dragging }`, as plain objects because a Redis adapter serializes it. `card:drag` needs member+ **and** `socket.rooms.has(room)`.

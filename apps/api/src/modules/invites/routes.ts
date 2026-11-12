@@ -1,4 +1,4 @@
-import { createInviteSchema } from '@taskboard/shared';
+import { createInviteSchema, MINUTE_MS } from '@taskboard/shared';
 import { Router, type RequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { TooManyRequests } from '../../lib/errors.js';
@@ -8,7 +8,7 @@ import { validateBody } from '../../middleware/validate.js';
 import * as controller from './controller.js';
 
 export const INVITE_EMAILS_PER_WINDOW = 20;
-const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+const RATE_LIMIT_WINDOW_MS = 15 * MINUTE_MS;
 
 /**
  * Create and resend send an email, so they share one budget per user. Without it, Resend in
@@ -17,7 +17,7 @@ const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
  */
 function inviteEmailLimit(): RequestHandler {
   return rateLimit({
-    windowMs: FIFTEEN_MINUTES_MS,
+    windowMs: RATE_LIMIT_WINDOW_MS,
     limit: INVITE_EMAILS_PER_WINDOW,
     keyGenerator: (req) => getAuthUserId(req),
     standardHeaders: 'draft-8',

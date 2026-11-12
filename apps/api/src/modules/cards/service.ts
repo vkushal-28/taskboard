@@ -56,7 +56,7 @@ export async function updateCard(
   if (assignees !== undefined) {
     const uniqueIds = [...new Set(assignees)];
     if (!(await areBoardMembers(boardId, uniqueIds))) {
-      throw new ValidationError(undefined, 'Assignees must be members of the board');
+      throw ValidationError.because('Assignees must be members of the board');
     }
     set.assignees = uniqueIds.map((userId) => new Types.ObjectId(userId));
   }
@@ -102,14 +102,18 @@ export async function moveCard(
 ): Promise<CardDto> {
   const { listId, beforeId, afterId } = input;
   if (beforeId === cardId || afterId === cardId) {
-    throw new ValidationError(undefined, 'A card cannot be its own neighbour');
+    throw ValidationError.because('A card cannot be its own neighbour');
   }
 
-  const card = await CardModel.findOne({ _id: cardId, boardId }, { listId: 1, archived: 1 }).lean();
+  // Independent reads, so one round trip. A missing card wins over a missing list.
+  const [card, targetList] = await Promise.all([
+    CardModel.findOne({ _id: cardId, boardId }, { listId: 1, archived: 1 }).lean(),
+    ListModel.exists({ _id: listId, boardId }),
+  ]);
   if (!card) throw new NotFound('Card not found');
-  if (card.archived) throw new ValidationError(undefined, 'Restore the card before moving it');
+  if (card.archived) throw ValidationError.because('Restore the card before moving it');
   // Missing or on another board: the client's view is stale, and other boards stay hidden.
-  if (!(await ListModel.exists({ _id: listId, boardId }))) throw new Conflict(STALE_ORDER_MESSAGE);
+  if (!targetList) throw new Conflict(STALE_ORDER_MESSAGE);
 
   const [before, after] = await Promise.all([
     neighbourPosition(listId, beforeId),
@@ -206,10 +210,7 @@ export async function addChecklistItem(
   ).lean();
   if (!card) {
     if (await CardModel.exists({ _id: cardId, boardId })) {
-      throw new ValidationError(
-        undefined,
-        `A checklist holds at most ${CHECKLIST_MAX_ITEMS} items`,
-      );
+      throw ValidationError.because(`A checklist holds at most ${CHECKLIST_MAX_ITEMS} items`);
     }
     throw new NotFound('Card not found');
   }

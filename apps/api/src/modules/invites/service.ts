@@ -1,14 +1,16 @@
 import {
+  DAY_MS,
   INVITE_TTL_DAYS,
   type CreateInviteInput,
   type InviteDto,
   type InvitePreview,
   type Role,
 } from '@taskboard/shared';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import type { Types } from 'mongoose';
 import { env } from '../../config/env.js';
 import { Conflict, Forbidden, Gone, NotFound } from '../../lib/errors.js';
+import { sha256Hex } from '../../lib/hash.js';
 import { sendEmail } from '../../lib/mailer.js';
 import { logActivity } from '../activity/service.js';
 import { BoardModel } from '../boards/model.js';
@@ -16,7 +18,7 @@ import { addMember, announce } from '../members/service.js';
 import { UserModel } from '../users/model.js';
 import { InviteModel, PENDING, toInviteDto, type Invite } from './model.js';
 
-const TTL_MS = INVITE_TTL_DAYS * 24 * 60 * 60 * 1000;
+const TTL_MS = INVITE_TTL_DAYS * DAY_MS;
 
 interface IssuedInvite {
   invite: InviteDto;
@@ -27,11 +29,7 @@ interface IssuedInvite {
 /** A fresh token for the link, and the hash that is stored instead of it. */
 function issueToken(): { token: string; tokenHash: string } {
   const token = randomBytes(32).toString('base64url');
-  return { token, tokenHash: hashToken(token) };
-}
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
+  return { token, tokenHash: sha256Hex(token) };
 }
 
 function inviteLink(token: string): string {
@@ -123,7 +121,7 @@ export async function revokeInvite(
 }
 
 export async function previewInvite(token: string, userId: string): Promise<InvitePreview> {
-  const invite = await InviteModel.findOne({ tokenHash: hashToken(token) }).lean();
+  const invite = await InviteModel.findOne({ tokenHash: sha256Hex(token) }).lean();
   const email = await emailOf(userId);
   assertUsable(invite, email);
   const [board, inviter] = await Promise.all([
@@ -143,7 +141,7 @@ export async function acceptInvite(
   token: string,
   userId: string,
 ): Promise<{ boardId: string; role: Role }> {
-  const tokenHash = hashToken(token);
+  const tokenHash = sha256Hex(token);
   const email = await emailOf(userId);
   // One atomic claim: of two requests with the same token, only one gets the invite.
   const claimed = await InviteModel.findOneAndUpdate(

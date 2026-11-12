@@ -1,10 +1,12 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { DAY_MS } from '@taskboard/shared';
 import { errors, jwtVerify, SignJWT } from 'jose';
 import { env } from '../../config/env.js';
 import { Unauthorized } from '../../lib/errors.js';
+import { sha256Hex } from '../../lib/hash.js';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
-export const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const REFRESH_TOKEN_TTL_MS = 7 * DAY_MS;
 
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 
@@ -47,5 +49,5 @@ export function generateRefreshToken(): string {
 }
 
 export function hashRefreshToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
+  return sha256Hex(token);
 }

@@ -1,12 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createInviteSchema,
+  DAY_MS,
+  ROLE_LABELS,
   roleSchema,
   ROLES,
   type BoardDetail,
   type BoardMemberDto,
   type InviteDto,
-  type Role,
 } from '@taskboard/shared';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -24,9 +25,6 @@ import {
   useResendInvite,
   useRevokeInvite,
 } from './api';
-
-const ROLE_LABELS: Record<Role, string> = { owner: 'Owner', member: 'Member', viewer: 'Viewer' };
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The link from the last create or resend. The api returns it once, so it lives here only. */
 interface IssuedLink {

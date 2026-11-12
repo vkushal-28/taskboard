@@ -59,7 +59,7 @@ export async function moveList(
   input: MoveListInput,
 ): Promise<ListDto> {
   if (input.beforeId === listId || input.afterId === listId) {
-    throw new ValidationError(undefined, 'A list cannot be its own neighbour');
+    throw ValidationError.because('A list cannot be its own neighbour');
   }
 
   const [before, after] = await Promise.all([

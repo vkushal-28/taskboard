@@ -1,4 +1,5 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { sha256Hex } from '../../lib/hash.js';
 import { SocketTicketModel } from './ticket-model.js';
 
 /** Long enough to open a socket right after asking, short enough to be useless if leaked. */
@@ -9,15 +10,11 @@ export interface TicketClaims {
   sessionId: string;
 }
 
-function hashTicket(ticket: string): string {
-  return createHash('sha256').update(ticket).digest('hex');
-}
-
 /** A new random ticket for this user and session (ADR 018). Only its hash is stored. */
 export async function issueTicket(userId: string, sessionId: string): Promise<string> {
   const ticket = randomBytes(32).toString('base64url');
   await SocketTicketModel.create({
-    tokenHash: hashTicket(ticket),
+    tokenHash: sha256Hex(ticket),
     userId,
     sessionId,
     expiresAt: new Date(Date.now() + SOCKET_TICKET_TTL_MS),
@@ -31,7 +28,7 @@ export async function issueTicket(userId: string, sessionId: string): Promise<st
  */
 export async function redeemTicket(ticket: string): Promise<TicketClaims | null> {
   const found = await SocketTicketModel.findOneAndDelete({
-    tokenHash: hashTicket(ticket),
+    tokenHash: sha256Hex(ticket),
     expiresAt: { $gt: new Date() },
   }).lean();
   return found ? { userId: found.userId.toString(), sessionId: found.sessionId } : null;
