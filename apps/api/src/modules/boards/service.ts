@@ -9,6 +9,7 @@ import type { Types } from 'mongoose';
 import { NotFound } from '../../lib/errors.js';
 import { positionBetween } from '../../lib/position.js';
 import { ActivityModel } from '../activity/model.js';
+import { recordWrite } from '../activity/record-write.js';
 import { logActivity } from '../activity/service.js';
 import { CardModel, toCardDto } from '../cards/model.js';
 import { CommentModel } from '../comments/model.js';
@@ -115,17 +116,11 @@ export async function updateBoard(
   }).lean();
   if (!board) throw new NotFound('Board not found');
 
-  await logActivity({
-    boardId,
-    actorId,
-    type: 'board.updated',
-    meta: { fields: Object.keys(input) },
-  });
-  emitToBoard(boardId, 'board:updated', {
-    boardId,
-    actorId,
-    board: { id: boardId, title: board.title, color: board.color },
-  });
+  await recordWrite(
+    { boardId, actorId, type: 'board.updated', meta: { fields: Object.keys(input) } },
+    'board:updated',
+    { boardId, actorId, board: { id: boardId, title: board.title, color: board.color } },
+  );
   return toBoardSummary(board, myRole);
 }
 

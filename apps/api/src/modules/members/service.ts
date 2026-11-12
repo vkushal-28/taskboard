@@ -1,10 +1,10 @@
 import type { BoardMemberDto, Role } from '@taskboard/shared';
 import type { Types } from 'mongoose';
 import { Conflict, NotFound } from '../../lib/errors.js';
-import { logActivity } from '../activity/service.js';
+import { recordWrite } from '../activity/record-write.js';
 import { BoardModel } from '../boards/model.js';
 import { CardModel } from '../cards/model.js';
-import { emitToBoard, syncMemberSockets } from '../realtime/emitter.js';
+import { syncMemberSockets } from '../realtime/emitter.js';
 
 const LAST_OWNER_MESSAGE = 'A board needs at least one owner. Make someone else an owner first.';
 
@@ -104,8 +104,11 @@ export async function announce(
   meta: Record<string, unknown>,
 ): Promise<BoardMemberDto[]> {
   const members = await listMembers(boardId);
-  await logActivity({ boardId, actorId, type, meta });
-  emitToBoard(boardId, 'members:updated', { boardId, actorId, members });
+  await recordWrite({ boardId, actorId, type, meta }, 'members:updated', {
+    boardId,
+    actorId,
+    members,
+  });
   return members;
 }
 

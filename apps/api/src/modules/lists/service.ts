@@ -1,10 +1,9 @@
 import type { CreateListInput, ListDto, MoveListInput, RenameListInput } from '@taskboard/shared';
 import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
 import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
-import { logActivity } from '../activity/service.js';
+import { recordWrite } from '../activity/record-write.js';
 import { CardModel } from '../cards/model.js';
 import { CommentModel } from '../comments/model.js';
-import { emitToBoard } from '../realtime/emitter.js';
 import { ListModel, toListDto } from './model.js';
 
 export async function createList(
@@ -17,14 +16,12 @@ export async function createList(
     ListModel.create({ boardId, title: input.title, position }),
   );
 
-  await logActivity({
-    boardId,
-    actorId,
-    type: 'list.created',
-    meta: { listId: list.id, title: list.title },
-  });
   const dto = toListDto(list);
-  emitToBoard(boardId, 'list:created', { boardId, actorId, list: dto });
+  await recordWrite(
+    { boardId, actorId, type: 'list.created', meta: { listId: list.id, title: list.title } },
+    'list:created',
+    { boardId, actorId, list: dto },
+  );
   return dto;
 }
 
@@ -41,14 +38,12 @@ export async function renameList(
   ).lean();
   if (!list) throw new NotFound('List not found');
 
-  await logActivity({
-    boardId,
-    actorId,
-    type: 'list.renamed',
-    meta: { listId, title: list.title },
-  });
   const dto = toListDto(list);
-  emitToBoard(boardId, 'list:updated', { boardId, actorId, list: dto });
+  await recordWrite(
+    { boardId, actorId, type: 'list.renamed', meta: { listId, title: list.title } },
+    'list:updated',
+    { boardId, actorId, list: dto },
+  );
   return dto;
 }
 
@@ -81,9 +76,12 @@ export async function moveList(
   );
   if (!list) throw new NotFound('List not found');
 
-  await logActivity({ boardId, actorId, type: 'list.moved', meta: { listId } });
   const dto = toListDto(list);
-  emitToBoard(boardId, 'list:moved', { boardId, actorId, list: dto });
+  await recordWrite({ boardId, actorId, type: 'list.moved', meta: { listId } }, 'list:moved', {
+    boardId,
+    actorId,
+    list: dto,
+  });
   return dto;
 }
 
@@ -98,13 +96,11 @@ export async function deleteList(boardId: string, listId: string, actorId: strin
   // Comments last: once their cards are gone, nothing can reach them.
   await CommentModel.deleteMany({ boardId, cardId: { $in: cards.map((card) => card._id) } });
 
-  await logActivity({
-    boardId,
-    actorId,
-    type: 'list.deleted',
-    meta: { listId, title: list.title },
-  });
-  emitToBoard(boardId, 'list:deleted', { boardId, actorId, listId });
+  await recordWrite(
+    { boardId, actorId, type: 'list.deleted', meta: { listId, title: list.title } },
+    'list:deleted',
+    { boardId, actorId, listId },
+  );
 }
 
 /** A neighbour that is missing or on another board means the client's view is stale. */

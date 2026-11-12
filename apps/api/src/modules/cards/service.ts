@@ -10,6 +10,7 @@ import {
 import { Types } from 'mongoose';
 import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
 import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
+import { recordWrite } from '../activity/record-write.js';
 import { logActivity } from '../activity/service.js';
 import { areBoardMembers } from '../boards/access.js';
 import { CommentModel } from '../comments/model.js';
@@ -42,9 +43,12 @@ export async function createCard(
     CardModel.create({ boardId, listId, ...input, position }),
   );
 
-  await logActivity({ boardId, actorId, cardId: card.id, type: 'card.created', meta: { listId } });
   const dto = toCardDto(card);
-  emitToBoard(boardId, 'card:created', { boardId, actorId, card: dto });
+  await recordWrite(
+    { boardId, actorId, cardId: card.id, type: 'card.created', meta: { listId } },
+    'card:created',
+    { boardId, actorId, card: dto },
+  );
   return dto;
 }
 
@@ -150,20 +154,13 @@ export async function moveCard(
   );
   if (!moved) throw new NotFound('Card not found');
 
-  await logActivity({
-    boardId,
-    actorId,
-    cardId,
-    type: 'card.moved',
-    meta: { fromListId: card.listId.toString(), toListId: listId },
-  });
+  const fromListId = card.listId.toString();
   const dto = toCardDto(moved);
-  emitToBoard(boardId, 'card:moved', {
-    boardId,
-    actorId,
-    card: dto,
-    fromListId: card.listId.toString(),
-  });
+  await recordWrite(
+    { boardId, actorId, cardId, type: 'card.moved', meta: { fromListId, toListId: listId } },
+    'card:moved',
+    { boardId, actorId, card: dto, fromListId },
+  );
   return dto;
 }
 
@@ -173,19 +170,12 @@ export async function deleteCard(boardId: string, cardId: string, actorId: strin
   // After the card (ADR 006): a crash in between leaves comments nothing can reach.
   await CommentModel.deleteMany({ boardId, cardId });
 
-  await logActivity({
-    boardId,
-    actorId,
-    cardId,
-    type: 'card.deleted',
-    meta: { listId: card.listId.toString(), title: card.title },
-  });
-  emitToBoard(boardId, 'card:deleted', {
-    boardId,
-    actorId,
-    cardId,
-    listId: card.listId.toString(),
-  });
+  const listId = card.listId.toString();
+  await recordWrite(
+    { boardId, actorId, cardId, type: 'card.deleted', meta: { listId, title: card.title } },
+    'card:deleted',
+    { boardId, actorId, cardId, listId },
+  );
 }
 
 /** A neighbour must be a visible card in the target list; anything else means a stale view. */
@@ -275,14 +265,11 @@ async function afterChecklistWrite(
   card: Parameters<typeof toCardDto>[0],
 ): Promise<CardDto> {
   const cardId = card._id.toString();
-  await logActivity({
-    boardId,
-    actorId,
-    cardId,
-    type: 'card.updated',
-    meta: { fields: ['checklist'] },
-  });
   const dto = toCardDto(card);
-  emitToBoard(boardId, 'card:updated', { boardId, actorId, card: dto });
+  await recordWrite(
+    { boardId, actorId, cardId, type: 'card.updated', meta: { fields: ['checklist'] } },
+    'card:updated',
+    { boardId, actorId, card: dto },
+  );
   return dto;
 }
