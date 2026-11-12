@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+/** The full-width submit button of the auth forms; disabled while the request runs. */
 export function SubmitButton({ pending, children }: { pending: boolean; children: ReactNode }) {
   return (
     <button
@@ -12,6 +13,7 @@ export function SubmitButton({ pending, children }: { pending: boolean; children
   );
 }
 
+/** A placeholder "Continue with GitHub" button; GitHub sign-in isn't built yet. */
 export function GitHubButton() {
   return (
     <button
@@ -29,6 +31,7 @@ export function GitHubButton() {
   );
 }
 
+/** The "or" line between the GitHub button and the form. */
 export function Divider() {
   return (
     <div className="my-6 flex items-center gap-3 text-xs text-slate-400 uppercase">

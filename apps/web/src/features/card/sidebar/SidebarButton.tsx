@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+/** A grey button in the card sidebar. Pass `expanded` when it opens a panel. */
 export function SidebarButton({
   children,
   onClick,

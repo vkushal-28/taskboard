@@ -6,6 +6,7 @@ import { BoardCanvas } from './BoardCanvas';
 import { BoardHeader } from './BoardHeader';
 import { useBoardSocket } from './useBoardSocket';
 
+/** The page at /b/:boardId. Loads the board and keeps it live through the board's socket room. */
 export function BoardPage() {
   const { boardId = '' } = useParams();
   const board = useBoard(boardId);

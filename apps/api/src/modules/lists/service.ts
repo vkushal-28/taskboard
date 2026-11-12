@@ -1,3 +1,7 @@
+/**
+ * Lists business logic. Lists are ordered by a fractional-index `position` string, so a move
+ * rewrites only the moved list (ADR 007). Every write is logged and broadcast to the board room.
+ */
 import type { CreateListInput, ListDto, MoveListInput, RenameListInput } from '@taskboard/shared';
 import { Conflict, NotFound, ValidationError } from '../../lib/errors.js';
 import { positionGap, STALE_ORDER_MESSAGE, writeAtPosition } from '../../lib/position.js';
@@ -6,6 +10,7 @@ import { CardModel } from '../cards/model.js';
 import { CommentModel } from '../comments/model.js';
 import { ListModel, toListDto } from './model.js';
 
+/** Adds a list at the right end of the board. */
 export async function createList(
   boardId: string,
   actorId: string,
@@ -25,6 +30,7 @@ export async function createList(
   return dto;
 }
 
+/** Renames a list. */
 export async function renameList(
   boardId: string,
   listId: string,
@@ -47,6 +53,10 @@ export async function renameList(
   return dto;
 }
 
+/**
+ * Moves a list between two neighbours. Only this list's document changes. Refuses with 409 when the
+ * client's order is out of date.
+ */
 export async function moveList(
   boardId: string,
   listId: string,
@@ -85,6 +95,7 @@ export async function moveList(
   return dto;
 }
 
+/** Deletes a list together with its cards and their comments. */
 export async function deleteList(boardId: string, listId: string, actorId: string): Promise<void> {
   const list = await ListModel.findOne({ _id: listId, boardId }, { title: 1 }).lean();
   if (!list) throw new NotFound('List not found');

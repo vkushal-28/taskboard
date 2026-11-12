@@ -9,6 +9,7 @@ import { Avatar } from '../../components/Avatar';
 import { useAuth } from '../auth/api';
 import { useChangeRole, useRemoveMember } from './api';
 
+/** The board's members in the Share dialog, with a role picker and a Remove button for each. */
 export function MemberList({ board }: { board: BoardDetail['board'] }) {
   const userId = useAuth().user?.id;
   return (

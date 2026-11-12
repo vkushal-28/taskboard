@@ -13,6 +13,9 @@ export function daysUntil(dueIso: string, now: number): number {
   return Math.round((startOfLocalDay(Date.parse(dueIso)) - startOfLocalDay(now)) / DAY_MS);
 }
 
+/**
+ * How urgent a due date is: overdue, today, soon (within 3 days) or later. Picks the badge colour.
+ */
 export function dueStatus(dueIso: string, now: number): DueStatus {
   const days = daysUntil(dueIso, now);
   if (days < 0) return 'overdue';

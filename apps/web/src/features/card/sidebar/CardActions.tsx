@@ -11,6 +11,7 @@ interface CardActionsProps {
   setLeaving: (leaving: boolean) => void;
 }
 
+/** Archive and Delete (with a confirm step). Both close the modal once the server agrees. */
 export function CardActions({ card, onClose, setLeaving }: CardActionsProps) {
   const archive = useUpdateCard(card.boardId, card.id);
   const remove = useDeleteCard(card.boardId, card.id);

@@ -6,6 +6,7 @@ import { useLiveStore } from './live-store';
 
 const MAX_AVATARS = 4;
 
+/** The bar above the board: title, your role, who is online, and the Share button for owners. */
 export function BoardHeader({ board }: { board: BoardDetail['board'] }) {
   const onlineUserIds = useLiveStore((state) => state.onlineUserIds);
   // Members only: an id the cached board doesn't know yet (a brand-new member) has no name.

@@ -6,6 +6,7 @@ const STYLES: Record<Role, string> = {
   viewer: 'bg-slate-100 text-slate-600 ring-slate-200',
 };
 
+/** A small coloured pill showing Owner, Member or Viewer. */
 export function RoleBadge({ role }: { role: Role }) {
   return (
     <span

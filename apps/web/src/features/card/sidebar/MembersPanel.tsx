@@ -3,6 +3,7 @@ import { Avatar } from '../../../components/Avatar';
 import { useUpdateCard } from '../api';
 import { panelClass } from './SidebarButton';
 
+/** Ticks which board members are assigned to the card. */
 export function MembersPanel({ card, members }: { card: CardDto; members: BoardMemberDto[] }) {
   const update = useUpdateCard(card.boardId, card.id);
 

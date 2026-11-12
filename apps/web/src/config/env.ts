@@ -29,6 +29,7 @@ const envSchema = z
 
 type WebEnv = z.output<typeof envSchema>;
 
+/** Checks the `VITE_*` settings the web app needs and throws a readable error if one is missing. */
 export function parseWebEnv(raw: Record<string, unknown>): WebEnv {
   const parsed = envSchema.safeParse(raw);
   if (!parsed.success) {

@@ -6,12 +6,14 @@ import { getBoardContext } from '../../middleware/require-board-role.js';
 import { parseQuery, type WithBody } from '../../middleware/validate.js';
 import * as commentsService from './service.js';
 
+/** GET /cards/:cardId/comments (viewer+): one page of comments, newest first. */
 export const listComments: RequestHandler = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const query = parseQuery(cursorQuerySchema, req.query);
   res.json(await commentsService.listComments(boardId, requireParam(req.params, 'cardId'), query));
 };
 
+/** POST /cards/:cardId/comments (member+): adds a comment. */
 export const addComment: WithBody<CreateCommentInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const result = await commentsService.addComment(

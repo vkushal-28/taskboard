@@ -7,6 +7,7 @@ import { formatRelative, useNow } from '../../../lib/time';
 import { useAddComment, useComments } from '../comments-api';
 import { ActorAvatar, LoadOlder } from './feed-parts';
 
+/** The card's comments, newest first, with the comment box for members. */
 export function CardComments({ card, canEdit }: { card: CardDto; canEdit: boolean }) {
   const comments = useComments(card.id);
   const now = useNow();

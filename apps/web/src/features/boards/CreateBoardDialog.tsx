@@ -22,6 +22,7 @@ interface CreateBoardDialogProps {
   onClose: () => void;
 }
 
+/** The dialog for a new board (title and colour). Opens the new board when created. */
 export function CreateBoardDialog({ open, onClose }: CreateBoardDialogProps) {
   return (
     <Dialog open={open} onClose={onClose} title="Create board">

@@ -1,3 +1,7 @@
+/**
+ * Board page writes: add a card or list, and move a card. Moves are optimistic (ADR 009); the
+ * others store the server's response in the cached board.
+ */
 import {
   cardResponseSchema,
   listResponseSchema,
@@ -18,6 +22,7 @@ export const moveCardKey = (boardId: string) => ['board', boardId, 'move-card'] 
 
 export const MOVE_FAILED_MESSAGE = 'Could not move the card, so it went back to where it was.';
 
+/** Adds a card and puts the server's copy into the cached board. */
 export function useCreateCard(boardId: string, listId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -34,6 +39,7 @@ export function useCreateCard(boardId: string, listId: string) {
   });
 }
 
+/** Adds a list and puts the server's copy into the cached board. */
 export function useCreateList(boardId: string) {
   const queryClient = useQueryClient();
   return useMutation({

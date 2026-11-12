@@ -12,6 +12,7 @@ import { getBoardContext } from '../../middleware/require-board-role.js';
 import type { WithBody } from '../../middleware/validate.js';
 import * as cardsService from './service.js';
 
+/** POST /lists/:listId/cards (member+): adds a card to the list. */
 export const createCard: WithBody<CreateCardInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const listId = requireParam(req.params, 'listId');
@@ -19,12 +20,14 @@ export const createCard: WithBody<CreateCardInput> = async (req, res) => {
   res.status(201).json({ card });
 };
 
+/** GET /cards/:cardId (viewer+): one card. */
 export const getCard: RequestHandler = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const card = await cardsService.getCard(boardId, requireParam(req.params, 'cardId'));
   res.json({ card });
 };
 
+/** PATCH /cards/:cardId (member+): changes the card's fields. */
 export const updateCard: WithBody<UpdateCardInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const cardId = requireParam(req.params, 'cardId');
@@ -32,6 +35,7 @@ export const updateCard: WithBody<UpdateCardInput> = async (req, res) => {
   res.json({ card });
 };
 
+/** PATCH /cards/:cardId/move (member+): moves the card between two neighbours. */
 export const moveCard: WithBody<MoveCardInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const cardId = requireParam(req.params, 'cardId');
@@ -39,12 +43,14 @@ export const moveCard: WithBody<MoveCardInput> = async (req, res) => {
   res.json({ card });
 };
 
+/** DELETE /cards/:cardId (member+): deletes the card. */
 export const deleteCard: RequestHandler = async (req, res) => {
   const { boardId } = getBoardContext(req);
   await cardsService.deleteCard(boardId, requireParam(req.params, 'cardId'), getAuthUserId(req));
   res.status(204).end();
 };
 
+/** POST /cards/:cardId/checklist (member+): adds a checklist item. */
 export const addChecklistItem: WithBody<AddChecklistItemInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const cardId = requireParam(req.params, 'cardId');
@@ -52,6 +58,7 @@ export const addChecklistItem: WithBody<AddChecklistItemInput> = async (req, res
   res.status(201).json({ card });
 };
 
+/** PATCH /cards/:cardId/checklist/:itemId (member+): edits or ticks one item. */
 export const updateChecklistItem: WithBody<UpdateChecklistItemInput> = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const card = await cardsService.updateChecklistItem(
@@ -64,6 +71,7 @@ export const updateChecklistItem: WithBody<UpdateChecklistItemInput> = async (re
   res.json({ card });
 };
 
+/** DELETE /cards/:cardId/checklist/:itemId (member+): removes one item. */
 export const deleteChecklistItem: RequestHandler = async (req, res) => {
   const { boardId } = getBoardContext(req);
   const card = await cardsService.deleteChecklistItem(

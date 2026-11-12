@@ -1,3 +1,7 @@
+/**
+ * Invites business logic: owners invite people by email with a one-time link. Only the SHA-256 of
+ * the link's token is stored, and a link only works for the email it was sent to (ADR 015).
+ */
 import {
   DAY_MS,
   INVITE_TTL_DAYS,
@@ -36,6 +40,7 @@ function inviteLink(token: string): string {
   return new URL(`/invite/${token}`, env.CLIENT_URL).toString();
 }
 
+/** The board's pending invites, newest first, with who sent each one. */
 export async function listInvites(boardId: string): Promise<InviteDto[]> {
   const invites = await InviteModel.find({ boardId, ...PENDING })
     .sort({ _id: -1 })
@@ -48,6 +53,10 @@ export async function listInvites(boardId: string): Promise<InviteDto[]> {
   return invites.map((invite) => toInviteDto(invite, inviterOf(invite, names)));
 }
 
+/**
+ * Invites an email address to the board: stores a hashed one-time token valid for 7 days, emails
+ * the link when email is set up, and returns the link so the owner can copy it.
+ */
 export async function createInvite(
   boardId: string,
   actorId: string,
@@ -120,6 +129,10 @@ export async function revokeInvite(
   await logActivity({ boardId, actorId, type: 'member.invite_revoked', meta: { inviteId } });
 }
 
+/**
+ * What the accept page shows (board, inviter, role) before the user accepts. Fails with a clear
+ * code if the link is invalid, used, revoked, expired or meant for someone else.
+ */
 export async function previewInvite(token: string, userId: string): Promise<InvitePreview> {
   const invite = await InviteModel.findOne({ tokenHash: sha256Hex(token) }).lean();
   const email = await emailOf(userId);
@@ -137,6 +150,7 @@ export async function previewInvite(token: string, userId: string): Promise<Invi
   };
 }
 
+/** Uses up the invite and adds the signed-in user to the board with the invited role. */
 export async function acceptInvite(
   token: string,
   userId: string,

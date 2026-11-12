@@ -1,3 +1,7 @@
+/**
+ * Board queries for the My boards page and the board page. `boardKeys.detail(id)` holds the whole
+ * board (lists, cards, members); socket events and every card write update that entry.
+ */
 import {
   boardDetailSchema,
   boardListResponseSchema,
@@ -15,6 +19,7 @@ export const boardKeys = {
   detail: (boardId: string) => [...boardKeys.all, 'detail', boardId] as const,
 };
 
+/** The user's boards for the My boards page. */
 export function useBoards() {
   return useQuery({
     queryKey: boardKeys.list(),
@@ -25,6 +30,7 @@ export function useBoards() {
   });
 }
 
+/** One board with its lists, cards and members. Socket events keep this cache entry up to date. */
 export function useBoard(boardId: string) {
   return useQuery({
     queryKey: boardKeys.detail(boardId),
@@ -37,6 +43,7 @@ export function useBoard(boardId: string) {
   });
 }
 
+/** Creates a board and caches the response, so the board page opens without another request. */
 export function useCreateBoard() {
   const queryClient = useQueryClient();
   return useMutation({

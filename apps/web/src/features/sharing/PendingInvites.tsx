@@ -6,6 +6,7 @@ import { useNow } from '../../lib/time';
 import { useInvites, useResendInvite, useRevokeInvite } from './api';
 import type { IssuedLink } from './issued-link';
 
+/** Invites not yet accepted, each with Resend and Revoke and how long it has left. */
 export function PendingInvites({
   boardId,
   onIssued,

@@ -1,3 +1,7 @@
+/**
+ * Boards business logic: list, create, read, update and delete boards. Members and their roles live
+ * inside the board document (ADR 005); the members module changes them.
+ */
 import type {
   BoardDetail,
   BoardSummary,
@@ -32,6 +36,7 @@ interface BoardSummaryRow {
   members: BoardMember[];
 }
 
+/** Every board the user belongs to, newest change first, each with the user's own role. */
 export async function listBoardsForUser(userId: string): Promise<BoardSummary[]> {
   // `members.$` returns only this user's member entry, which holds their role.
   const boards = await BoardModel.find(
@@ -47,6 +52,7 @@ export async function listBoardsForUser(userId: string): Promise<BoardSummary[]>
   });
 }
 
+/** Creates a board owned by the user, with three starter lists (To Do, In Progress, Done). */
 export async function createBoard(userId: string, input: CreateBoardInput): Promise<BoardDetail> {
   const board = await BoardModel.create({
     title: input.title,
@@ -76,6 +82,10 @@ interface PopulatedMember {
   role: Role;
 }
 
+/**
+ * Everything the board page needs in one response: the board, its members, its lists and its
+ * visible (not archived) cards.
+ */
 export async function getBoardDetail(boardId: string, myRole: Role): Promise<BoardDetail> {
   const [board, lists, cards] = await Promise.all([
     BoardModel.findById(boardId)
@@ -105,6 +115,7 @@ export async function getBoardDetail(boardId: string, myRole: Role): Promise<Boa
   };
 }
 
+/** Renames or recolours a board, then logs and broadcasts the change. */
 export async function updateBoard(
   boardId: string,
   actorId: string,
@@ -124,6 +135,7 @@ export async function updateBoard(
   return toBoardSummary(board, myRole);
 }
 
+/** Deletes a board and everything in it, and tells everyone viewing it. */
 export async function deleteBoard(boardId: string, actorId: string): Promise<void> {
   // Board first (ADR 006): once it is gone the access check fails, so any children a crash
   // leaves behind cannot be reached.

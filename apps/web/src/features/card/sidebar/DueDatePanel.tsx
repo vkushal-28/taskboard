@@ -3,6 +3,7 @@ import { useUpdateCard } from '../api';
 import { dateInputToIso, isoToDateInput } from '../date-input';
 import { panelClass } from './SidebarButton';
 
+/** Sets or removes the card's due date. */
 export function DueDatePanel({ card }: { card: CardDto }) {
   const update = useUpdateCard(card.boardId, card.id);
 

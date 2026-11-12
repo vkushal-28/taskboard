@@ -6,6 +6,7 @@ import { describeError } from '../../lib/api-error';
 import { useCreateInvite } from './api';
 import type { IssuedLink } from './issued-link';
 
+/** The "invite by email" form at the top of the Share dialog. */
 export function InviteForm({
   boardId,
   onIssued,
@@ -69,6 +70,7 @@ export function InviteForm({
   );
 }
 
+/** Shows the invite link that was just created or resent, with a Copy button. */
 export function IssuedLinkBox({ issued }: { issued: IssuedLink }) {
   const [copied, setCopied] = useState(false);
 

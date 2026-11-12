@@ -9,6 +9,10 @@ interface CardChecklistProps {
   canEdit: boolean;
 }
 
+/**
+ * The card's checklist with a progress bar. Members can add, tick, edit and remove items; each item
+ * saves on its own.
+ */
 export function CardChecklist({ card, canEdit }: CardChecklistProps) {
   const items = card.checklist;
   const done = items.filter((item) => item.done).length;

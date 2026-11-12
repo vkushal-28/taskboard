@@ -24,6 +24,7 @@ listSchema.index({ boardId: 1, position: 1 }, { unique: true });
 
 export const ListModel = model<List>('List', listSchema);
 
+/** The JSON shape of a list that the api sends to clients. */
 export function toListDto(
   list: Pick<List, 'boardId' | 'title' | 'position'> & { _id: Types.ObjectId },
 ): ListDto {

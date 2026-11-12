@@ -14,6 +14,7 @@ const LABEL_COLORS = [
 ];
 const MAX_LABELS = 10;
 
+/** Adds labels (name and colour) to the card and removes them. */
 export function LabelsPanel({ card }: { card: CardDto }) {
   const update = useUpdateCard(card.boardId, card.id);
   const [name, setName] = useState('');

@@ -5,6 +5,10 @@ const TONES = {
   info: 'border-slate-200 bg-white text-slate-800',
 };
 
+/**
+ * Shows the toast messages from the toast store in the corner of the screen. Rendered once, in the
+ * root layout.
+ */
 export function Toaster() {
   const toasts = useToastStore((state) => state.toasts);
   const dismiss = useToastStore((state) => state.dismiss);

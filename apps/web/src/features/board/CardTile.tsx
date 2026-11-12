@@ -93,6 +93,10 @@ interface SortableCardProps extends CardTileProps {
   disabled: boolean;
 }
 
+/**
+ * A card in a list that can be dragged (pointer or Space) and opened (click or Enter). Shows who
+ * else is moving it.
+ */
 export function SortableCard({ card, members, listId, disabled }: SortableCardProps) {
   const {
     attributes,

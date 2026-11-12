@@ -5,6 +5,7 @@ import { formatRelative, useNow } from '../../lib/time';
 import { useRecentActivity } from './api';
 import { describeActivity } from './describe';
 
+/** The "Recent activity" feed on the My boards page. */
 export function RecentActivity() {
   const activity = useRecentActivity();
   const now = useNow();

@@ -10,6 +10,10 @@ interface AppHeaderProps {
   fullWidth?: boolean;
 }
 
+/**
+ * The top bar on signed-in pages: logo, navigation, an optional search box (My boards passes one)
+ * and the account menu. The board page passes `fullWidth` so it lines up with the board.
+ */
 export function AppHeader({ search, fullWidth = false }: AppHeaderProps) {
   return (
     <header className="border-b border-slate-200 bg-white">

@@ -72,6 +72,10 @@ const envSchema = z
 
 type Env = z.infer<typeof envSchema>;
 
+/**
+ * Validates a set of environment variables against the schema and throws if any is missing or
+ * invalid. Tests call it with their own values; the app uses `env` below.
+ */
 export function parseEnv(raw: NodeJS.ProcessEnv): Env {
   return envSchema.parse(raw);
 }

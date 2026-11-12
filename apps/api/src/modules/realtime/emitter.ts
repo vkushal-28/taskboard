@@ -38,6 +38,10 @@ interface PlainEmitter {
 // call. Until one is set (tests, scripts) emits are skipped.
 let io: RealtimeServer | null = null;
 
+/**
+ * Called once at startup with the Socket.IO server, so services can broadcast. Until then (tests,
+ * scripts) broadcasts are skipped.
+ */
 export function setRealtimeServer(server: RealtimeServer | null): void {
   io = server;
 }

@@ -22,6 +22,7 @@ function historySentence(item: ActivityItem): string {
   return HISTORY_SENTENCES[item.type] ?? 'changed this card';
 }
 
+/** The card's history: who created, moved, changed or archived it, and when. */
 export function CardHistory({ cardId }: { cardId: string }) {
   const history = useCardActivity(cardId);
   const now = useNow();

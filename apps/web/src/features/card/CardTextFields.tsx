@@ -13,6 +13,7 @@ interface FieldProps {
   canEdit: boolean;
 }
 
+/** The card title, edited in place. Saves on Enter or blur; Escape discards. */
 export function CardTitleField({ card, canEdit }: FieldProps) {
   const [draft, setDraft] = useState<string | null>(null);
   // Escape blurs the field, and the blur handler would still see the draft (state updates
@@ -57,6 +58,7 @@ export function CardTitleField({ card, canEdit }: FieldProps) {
   );
 }
 
+/** The card description, edited in place. Saves on Save, ⌘/Ctrl+Enter or blur; Escape discards. */
 export function CardDescriptionField({ card, canEdit }: FieldProps) {
   const [draft, setDraft] = useState<string | null>(null);
   // Set once the editor saves or cancels, so a blur that arrives while it closes (the textarea

@@ -4,6 +4,7 @@ export function dateInputToIso(value: string): string {
   return new Date(`${value}T12:00:00`).toISOString();
 }
 
+/** The other direction: an ISO date as the `YYYY-MM-DD` a date input expects, in local time. */
 export function isoToDateInput(iso: string): string {
   const date = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');

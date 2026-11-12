@@ -10,6 +10,7 @@ interface CardActivityProps {
   canEdit: boolean;
 }
 
+/** The bottom of the card modal: switches between comments and the card's history. */
 export function CardActivity({ card, canEdit }: CardActivityProps) {
   const [tab, setTab] = useState<Tab>('comments');
 

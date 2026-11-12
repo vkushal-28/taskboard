@@ -1,3 +1,8 @@
+/**
+ * Cards business logic: create, edit, move, archive, delete, and the checklist. Every write bumps
+ * the card's `version` (ADR 013), logs an activity row and broadcasts to the board room, in that
+ * order.
+ */
 import {
   CHECKLIST_MAX_ITEMS,
   type AddChecklistItemInput,
@@ -28,6 +33,7 @@ type CardFieldsUpdate = Partial<
   checklist?: (Omit<ChecklistItem, '_id'> & { _id?: string })[];
 };
 
+/** Adds a card at the bottom of a list. */
 export async function createCard(
   boardId: string,
   listId: string,
@@ -52,12 +58,17 @@ export async function createCard(
   return dto;
 }
 
+/** One card, if it is on this board. */
 export async function getCard(boardId: string, cardId: string): Promise<CardDto> {
   const card = await CardModel.findOne({ _id: cardId, boardId }).lean();
   if (!card) throw new NotFound('Card not found');
   return toCardDto(card);
 }
 
+/**
+ * Changes a card's fields (title, description, labels, members, due date, archived) in one atomic
+ * write, then logs and broadcasts it.
+ */
 export async function updateCard(
   boardId: string,
   cardId: string,
@@ -108,6 +119,11 @@ export async function updateCard(
   return dto;
 }
 
+/**
+ * Moves a card to a position between two neighbours, in the same or another list. Only this card's
+ * document changes (fractional indexing). Refuses with 409 when the client's view of the list is
+ * out of date.
+ */
 export async function moveCard(
   boardId: string,
   cardId: string,
@@ -164,6 +180,7 @@ export async function moveCard(
   return dto;
 }
 
+/** Deletes a card and its comments. */
 export async function deleteCard(boardId: string, cardId: string, actorId: string): Promise<void> {
   const card = await CardModel.findOneAndDelete({ _id: cardId, boardId }).lean();
   if (!card) throw new NotFound('Card not found');
@@ -196,6 +213,7 @@ async function neighbourPosition(
 // ticking different items at once can't overwrite each other's change (ADR 013). Every
 // write returns the whole card, logs one activity entry and broadcasts card:updated.
 
+/** Adds an item to the end of a card's checklist, up to the limit. */
 export async function addChecklistItem(
   boardId: string,
   cardId: string,
@@ -217,6 +235,7 @@ export async function addChecklistItem(
   return afterChecklistWrite(boardId, actorId, card);
 }
 
+/** Changes the text or ticks one checklist item. */
 export async function updateChecklistItem(
   boardId: string,
   cardId: string,
@@ -238,6 +257,7 @@ export async function updateChecklistItem(
   return afterChecklistWrite(boardId, actorId, card);
 }
 
+/** Removes one checklist item. */
 export async function deleteChecklistItem(
   boardId: string,
   cardId: string,

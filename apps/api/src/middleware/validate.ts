@@ -5,6 +5,10 @@ import { ValidationError } from '../lib/errors.js';
 // validateBody() runs before these handlers, so the body type is guaranteed by the route.
 export type WithBody<Body> = RequestHandler<Record<string, string>, unknown, Body>;
 
+/**
+ * Checks `req.body` against a Zod schema. Invalid bodies get a 400 `VALIDATION_ERROR`; valid ones
+ * are replaced by the parsed (trimmed, defaulted) value.
+ */
 export function validateBody(schema: z.ZodType): RequestHandler {
   return (req, _res, next) => {
     const result = schema.safeParse(req.body);

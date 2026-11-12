@@ -70,6 +70,7 @@ cardSchema.index({ boardId: 1, listId: 1, position: 1 }, { unique: true });
 
 export const CardModel = model<Card>('Card', cardSchema);
 
+/** The JSON shape of a card that the api sends to clients (ids as strings, dates as ISO). */
 export function toCardDto(
   card: Omit<Card, 'createdAt' | 'updatedAt' | 'version' | 'commentCount'> & {
     _id: Types.ObjectId;

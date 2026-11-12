@@ -7,12 +7,20 @@ import { BoardModel } from './model.js';
 // Every lookup returns null for a malformed id instead of letting Mongoose throw a CastError,
 // so a bad id gets the same 404 as an unknown one.
 
+/**
+ * The board a list belongs to, or `null`. Lets `requireBoardRole` check routes that only name a
+ * list.
+ */
 export async function findBoardIdForList(listId: string): Promise<string | null> {
   if (!isObjectIdOrHexString(listId)) return null;
   const list = await ListModel.findById(listId, { boardId: 1 }).lean();
   return list ? list.boardId.toString() : null;
 }
 
+/**
+ * The board a card belongs to, or `null`. Lets `requireBoardRole` check routes that only name a
+ * card.
+ */
 export async function findBoardIdForCard(cardId: string): Promise<string | null> {
   if (!isObjectIdOrHexString(cardId)) return null;
   const card = await CardModel.findById(cardId, { boardId: 1 }).lean();

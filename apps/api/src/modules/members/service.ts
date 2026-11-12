@@ -1,3 +1,7 @@
+/**
+ * Board membership: change a member's role or remove them. A board always keeps at least one owner.
+ * Changes are pushed to open sockets so the affected person's view updates at once.
+ */
 import type { BoardMemberDto, Role } from '@taskboard/shared';
 import type { Types } from 'mongoose';
 import { Conflict, NotFound } from '../../lib/errors.js';
@@ -33,6 +37,10 @@ function anotherOwnerThan(userId: string) {
   return { members: { $elemMatch: { role: 'owner', userId: { $ne: userId } } } };
 }
 
+/**
+ * Gives a member a new role. A board always keeps at least one owner, so demoting the last owner
+ * fails with 409 `LAST_OWNER`.
+ */
 export async function changeRole(
   boardId: string,
   actorId: string,
@@ -57,6 +65,10 @@ export async function changeRole(
   return announce(boardId, actorId, 'member.role_changed', { userId, role });
 }
 
+/**
+ * Removes someone from the board and from every card they were assigned to. The last owner can't be
+ * removed.
+ */
 export async function removeMember(
   boardId: string,
   actorId: string,
