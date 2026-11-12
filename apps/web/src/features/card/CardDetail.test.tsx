@@ -8,7 +8,7 @@ import { fakeSocket } from '../../test/fake-socket';
 import { errorResponse, json, noContent } from '../../test/http';
 import { renderApp, stubApi, type FakeRoute } from '../../test/render';
 import { CARD_GONE_MESSAGE } from './CardDetailRoute';
-import { dateInputToIso, isoToDateInput } from './CardSidebar';
+import { dateInputToIso, isoToDateInput } from './date-input';
 
 const priya = { id: 'u1', name: 'Priya Sharma', email: 'priya@acme.dev' };
 const CHECKLIST = [
